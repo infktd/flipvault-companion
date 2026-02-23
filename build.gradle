@@ -1,0 +1,35 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.runelite.net' }
+}
+
+dependencies {
+    compileOnly 'net.runelite:client:1.12.17'
+    compileOnly 'com.squareup.okhttp3:okhttp:4.12.0'
+    compileOnly 'org.projectlombok:lombok:1.18.40'
+    annotationProcessor 'org.projectlombok:lombok:1.18.40'
+
+    testImplementation 'junit:junit:4.13.2'
+    testCompileOnly 'org.projectlombok:lombok:1.18.40'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.40'
+}
+
+group = 'com.flipvault'
+version = '0.1.0'
+
+// No toolchain block - use host Java 25 with release flag for Java 11 bytecode
+tasks.withType(JavaCompile).configureEach {
+    options.release.set(11)
+    options.encoding = 'UTF-8'
+}
+
+jar {
+    manifest {
+        attributes 'Implementation-Title': 'FlipVault Companion'
+        attributes 'Implementation-Version': archiveVersion
+    }
+}
