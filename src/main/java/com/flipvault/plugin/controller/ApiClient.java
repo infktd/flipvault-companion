@@ -10,6 +10,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -208,6 +209,8 @@ public class ApiClient {
                 return new JsonObject();
             }
             return new JsonParser().parse(responseBody).getAsJsonObject();
+        } catch (SocketTimeoutException e) {
+            throw new ApiException("Request timed out", e);
         } catch (IOException e) {
             throw new ApiException("Network error: " + e.getMessage(), e);
         }

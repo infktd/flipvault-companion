@@ -1,5 +1,6 @@
 package com.flipvault.plugin.controller;
 
+import com.flipvault.plugin.manager.FlipLogger;
 import com.flipvault.plugin.manager.FlipManager;
 import com.flipvault.plugin.manager.OfferManager;
 import com.flipvault.plugin.manager.SessionManager;
@@ -17,19 +18,24 @@ public class GEOfferHandler {
     private final OfferManager offerManager;
     private final FlipManager flipManager;
     private final SessionManager sessionManager;
+    private final FlipLogger flipLogger;
     private final ApiClient apiClient;
+    private final AuthController authController;
     private final ExecutorService executor;
 
     // Listener for when state changes are detected (triggers suggestion refresh)
     private Runnable onStateChangedCallback;
 
     public GEOfferHandler(OfferManager offerManager, FlipManager flipManager,
-                          SessionManager sessionManager, ApiClient apiClient,
+                          SessionManager sessionManager, FlipLogger flipLogger,
+                          ApiClient apiClient, AuthController authController,
                           ExecutorService executor) {
         this.offerManager = offerManager;
         this.flipManager = flipManager;
         this.sessionManager = sessionManager;
+        this.flipLogger = flipLogger;
         this.apiClient = apiClient;
+        this.authController = authController;
         this.executor = executor;
     }
 
@@ -82,6 +88,7 @@ public class GEOfferHandler {
             );
             if (tx != null) {
                 sessionManager.recordFlip(tx.getProfit());
+                flipLogger.logFlip(tx);
                 reportTransaction(tx);
             }
         }
@@ -100,7 +107,10 @@ public class GEOfferHandler {
                 log.debug("Transaction reported to backend: item={} profit={}", tx.getItemId(), tx.getProfit());
             } catch (ApiException e) {
                 log.warn("Failed to report transaction: {}", e.getMessage());
-                // Could add to a retry queue here
+                if (e.getStatusCode() == 401) {
+                    authController.onUnauthorized();
+                }
+                // Could add to a retry queue here for other errors
             }
         });
     }

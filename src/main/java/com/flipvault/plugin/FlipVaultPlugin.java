@@ -56,6 +56,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     private SessionManager sessionManager;
     private FlipManager flipManager;
     private OfferManager offerManager;
+    private FlipLogger flipLogger;
 
     // Controllers
     private ApiClient apiClient;
@@ -72,6 +73,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     private ScheduledFuture<?> heartbeatFuture;
     private boolean loggedIn;
     private String sessionStartedIso;
+    private long lastPeriodicSaveTime;
 
     @Provides
     FlipVaultConfig provideConfig(ConfigManager configManager) {
@@ -93,12 +95,13 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         sessionManager = new SessionManager();
         flipManager = new FlipManager();
         offerManager = new OfferManager();
+        flipLogger = new FlipLogger();
 
         // 3. Instantiate controllers
         apiClient = new ApiClient();
         authController = new AuthController(apiClient, config, configManager, flipvaultExecutor);
-        suggestionController = new SuggestionController(apiClient, flipManager, flipvaultExecutor);
-        geOfferHandler = new GEOfferHandler(offerManager, flipManager, sessionManager, apiClient, flipvaultExecutor);
+        suggestionController = new SuggestionController(apiClient, authController, flipManager, flipvaultExecutor);
+        geOfferHandler = new GEOfferHandler(offerManager, flipManager, sessionManager, flipLogger, apiClient, authController, flipvaultExecutor);
 
         // Wire GE offer state changes to trigger suggestion refresh
         geOfferHandler.setOnStateChangedCallback(() -> {
@@ -197,7 +200,9 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
 
         // Save state
         if (lastAccountState != null && lastAccountState.getPlayerName() != null) {
-            offerManager.save(lastAccountState.getPlayerName());
+            String playerName = lastAccountState.getPlayerName();
+            offerManager.save(playerName);
+            sessionManager.save(playerName);
         }
 
         // Unregister
@@ -210,10 +215,27 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
 
     // ---- Tick (1 second) ----
 
+    private static final long PERIODIC_SAVE_INTERVAL_MS = 5 * 60 * 1000L; // 5 minutes
+
     private void tick() {
         if (!loggedIn || authController.getState() != AuthState.VALID) {
             return;
         }
+
+        // Periodic save every 5 minutes
+        long now = System.currentTimeMillis();
+        if (now - lastPeriodicSaveTime >= PERIODIC_SAVE_INTERVAL_MS) {
+            lastPeriodicSaveTime = now;
+            if (lastAccountState != null && lastAccountState.getPlayerName() != null) {
+                String playerName = lastAccountState.getPlayerName();
+                flipvaultExecutor.submit(() -> {
+                    offerManager.save(playerName);
+                    sessionManager.save(playerName);
+                    log.debug("Periodic save completed for {}", playerName);
+                });
+            }
+        }
+
         clientThread.invokeLater(this::snapshotGameState);
     }
 
@@ -344,6 +366,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
             case LOGGED_IN:
                 loggedIn = true;
                 sessionStartedIso = Instant.now().toString();
+                lastPeriodicSaveTime = System.currentTimeMillis();
                 sessionManager.startSession();
 
                 // Load persisted state and validate key
@@ -352,6 +375,8 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                     if (localPlayer != null && localPlayer.getName() != null) {
                         String playerName = localPlayer.getName();
                         offerManager.load(playerName);
+                        sessionManager.load(playerName);
+                        flipLogger.setPlayerName(playerName);
                         panel.getKeySelectionPanel().setPlayerName(playerName);
 
                         // Validate stored key if we have one
@@ -368,7 +393,9 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                 if (loggedIn) {
                     // Save state on logout
                     if (lastAccountState != null && lastAccountState.getPlayerName() != null) {
-                        offerManager.save(lastAccountState.getPlayerName());
+                        String pn = lastAccountState.getPlayerName();
+                        offerManager.save(pn);
+                        sessionManager.save(pn);
                     }
                     loggedIn = false;
                     suggestionController.clearSuggestion();
@@ -380,7 +407,9 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
             case HOPPING:
                 // Save state during world hop
                 if (lastAccountState != null && lastAccountState.getPlayerName() != null) {
-                    offerManager.save(lastAccountState.getPlayerName());
+                    String hopName = lastAccountState.getPlayerName();
+                    offerManager.save(hopName);
+                    sessionManager.save(hopName);
                 }
                 break;
 
@@ -438,12 +467,24 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         try {
             return ImageUtil.loadImageResource(getClass(), "icon.png");
         } catch (Exception e) {
-            log.warn("Could not load plugin icon, using default");
-            // Return a simple colored square as fallback
+            log.warn("Could not load plugin icon, using fallback");
+            // Return a green rectangle with "FV" text as fallback
             BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
             java.awt.Graphics2D g = img.createGraphics();
+            g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            // Green background with rounded corners
             g.setColor(new java.awt.Color(56, 176, 0));
-            g.fillRect(0, 0, 16, 16);
+            g.fillRoundRect(0, 0, 16, 16, 4, 4);
+            // White "FV" text
+            g.setColor(java.awt.Color.WHITE);
+            g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, 10));
+            java.awt.FontMetrics fm = g.getFontMetrics();
+            String text = "FV";
+            int textWidth = fm.stringWidth(text);
+            int x = (16 - textWidth) / 2;
+            int y = (16 + fm.getAscent() - fm.getDescent()) / 2;
+            g.drawString(text, x, y);
             g.dispose();
             return img;
         }

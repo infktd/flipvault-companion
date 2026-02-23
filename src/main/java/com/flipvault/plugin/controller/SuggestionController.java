@@ -4,6 +4,7 @@ import com.flipvault.plugin.manager.FlipManager;
 import com.flipvault.plugin.model.AccountState;
 import com.flipvault.plugin.model.ActiveFlip;
 import com.flipvault.plugin.model.Suggestion;
+import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import javax.swing.SwingUtilities;
@@ -14,8 +15,12 @@ import lombok.extern.slf4j.Slf4j;
 public class SuggestionController {
     private static final long MIN_REQUEST_INTERVAL_MS = 2000;
     private static final long WAIT_RETRY_MS = 30000;
+    private static final long NETWORK_ERROR_RETRY_MS = 10000;
+    private static final long SERVER_ERROR_RETRY_MS = 30000;
+    private static final long TIMEOUT_RETRY_MS = 5000;
 
     private final ApiClient apiClient;
+    private final AuthController authController;
     private final FlipManager flipManager;
     private final ExecutorService executor;
 
@@ -32,8 +37,10 @@ public class SuggestionController {
         void onSuggestionLoading();
     }
 
-    public SuggestionController(ApiClient apiClient, FlipManager flipManager, ExecutorService executor) {
+    public SuggestionController(ApiClient apiClient, AuthController authController,
+                                FlipManager flipManager, ExecutorService executor) {
         this.apiClient = apiClient;
+        this.authController = authController;
         this.flipManager = flipManager;
         this.executor = executor;
     }
@@ -108,7 +115,7 @@ public class SuggestionController {
 
                 // If WAIT, schedule a retry after WAIT_RETRY_MS
                 if ("WAIT".equals(suggestion.getAction())) {
-                    scheduleWaitRetry(state);
+                    scheduleRetry(state, WAIT_RETRY_MS);
                 }
             } catch (ApiException e) {
                 log.warn("Suggestion request failed: {} (status={})", e.getMessage(), e.getStatusCode());
@@ -119,18 +126,41 @@ public class SuggestionController {
                         listener.onSuggestionError(e.getMessage());
                     }
                 });
+
+                // Error-specific retry logic
+                int status = e.getStatusCode();
+                if (status == 401) {
+                    // Auth expired - don't retry, let auth controller handle it
+                    authController.onUnauthorized();
+                } else if (status >= 500) {
+                    // Server error - retry after 30s
+                    scheduleRetry(state, SERVER_ERROR_RETRY_MS);
+                } else if (status == 0 && isTimeout(e)) {
+                    // Timeout - retry after 5s
+                    scheduleRetry(state, TIMEOUT_RETRY_MS);
+                } else if (status == 0) {
+                    // Other network error - retry after 10s
+                    scheduleRetry(state, NETWORK_ERROR_RETRY_MS);
+                }
+                // For 4xx (other than 401), don't auto-retry
             } finally {
                 requestInFlight = false;
             }
         });
     }
 
-    private void scheduleWaitRetry(AccountState state) {
+    private boolean isTimeout(ApiException e) {
+        Throwable cause = e.getCause();
+        return cause instanceof SocketTimeoutException
+            || (e.getMessage() != null && e.getMessage().toLowerCase().contains("timeout"));
+    }
+
+    private void scheduleRetry(AccountState state, long delayMs) {
         executor.submit(() -> {
             try {
-                Thread.sleep(WAIT_RETRY_MS);
+                Thread.sleep(delayMs);
                 // After waiting, try again if no other request happened
-                if (System.currentTimeMillis() - lastRequestTime >= WAIT_RETRY_MS) {
+                if (System.currentTimeMillis() - lastRequestTime >= delayMs) {
                     requestSuggestion(state);
                 }
             } catch (InterruptedException e) {
