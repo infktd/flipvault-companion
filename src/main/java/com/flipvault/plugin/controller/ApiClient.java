@@ -45,6 +45,10 @@ public class ApiClient {
         return apiKey;
     }
 
+    public void clearApiKey() {
+        this.apiKey = null;
+    }
+
     /**
      * Authenticate with email/password to retrieve API keys.
      * Does NOT send X-API-Key header.
