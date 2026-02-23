@@ -13,6 +13,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import javax.swing.SwingUtilities;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.config.ConfigManager;
 
@@ -31,6 +32,8 @@ public class AuthController {
     private volatile String errorMessage = "";
     @Getter
     private volatile String conflictPlayerName = "";
+    @Getter @Setter
+    private volatile String pendingPlayerName = "";
 
     private final List<AuthStateListener> listeners = new CopyOnWriteArrayList<>();
 
@@ -87,7 +90,14 @@ public class AuthController {
                 JsonObject response = apiClient.login(email, password);
                 List<ApiKey> keys = parseKeys(response);
                 availableKeys = keys;
-                setState(AuthState.SELECTING_KEY);
+
+                if (keys.size() == 1 && pendingPlayerName != null && !pendingPlayerName.isEmpty()) {
+                    // Auto-activate single key — skip key selection UI
+                    log.debug("Single key found, auto-activating for player: {}", pendingPlayerName);
+                    activateKey(keys.get(0).getId(), pendingPlayerName);
+                } else {
+                    setState(AuthState.SELECTING_KEY);
+                }
             } catch (ApiException e) {
                 errorMessage = e.getMessage();
                 if (e.getStatusCode() == 401 || e.getStatusCode() == 403) {

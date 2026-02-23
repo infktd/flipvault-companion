@@ -16,6 +16,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -48,6 +50,9 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
     // Collect / cancel labels
     private JLabel collectLabel;
     private JLabel cancelLabel;
+
+    // Auto-fill feedback
+    private JLabel filledLabel;
 
     private Runnable refreshCallback;
 
@@ -225,6 +230,15 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         panel.add(reasonArea);
         panel.add(Box.createVerticalStrut(10));
 
+        // Auto-fill feedback label (hidden by default)
+        filledLabel = new JLabel("Filled!");
+        filledLabel.setForeground(COLOR_CYAN);
+        filledLabel.setFont(FontManager.getRunescapeBoldFont());
+        filledLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        filledLabel.setVisible(false);
+        panel.add(filledLabel);
+        panel.add(Box.createVerticalStrut(6));
+
         // Bottom buttons
         panel.add(buildButtonBar());
 
@@ -375,6 +389,36 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
             }
         });
         return btn;
+    }
+
+    // ---- Auto-fill feedback ----
+
+    /**
+     * Show "Filled!" text that fades after 2 seconds.
+     * Called from the plugin when auto-fill succeeds.
+     */
+    public void showAutoFillFeedback(boolean success) {
+        SwingUtilities.invokeLater(() -> {
+            if (success) {
+                filledLabel.setText("Filled!");
+                filledLabel.setForeground(COLOR_CYAN);
+            } else {
+                filledLabel.setText("Can't fill \u2014 open a GE offer first");
+                filledLabel.setForeground(COLOR_SELL);
+            }
+            filledLabel.setVisible(true);
+            revalidate();
+            repaint();
+
+            // Hide after 2 seconds
+            Timer timer = new Timer(2000, e -> {
+                filledLabel.setVisible(false);
+                revalidate();
+                repaint();
+            });
+            timer.setRepeats(false);
+            timer.start();
+        });
     }
 
     // ---- Formatting helpers ----

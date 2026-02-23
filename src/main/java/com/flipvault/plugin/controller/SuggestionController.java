@@ -7,6 +7,8 @@ import com.flipvault.plugin.model.Suggestion;
 import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import javax.swing.SwingUtilities;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,7 @@ public class SuggestionController {
     private final AuthController authController;
     private final FlipManager flipManager;
     private final ExecutorService executor;
+    private final ScheduledExecutorService scheduledExecutor;
 
     @Getter
     private volatile Suggestion currentSuggestion;
@@ -38,11 +41,13 @@ public class SuggestionController {
     }
 
     public SuggestionController(ApiClient apiClient, AuthController authController,
-                                FlipManager flipManager, ExecutorService executor) {
+                                FlipManager flipManager, ExecutorService executor,
+                                ScheduledExecutorService scheduledExecutor) {
         this.apiClient = apiClient;
         this.authController = authController;
         this.flipManager = flipManager;
         this.executor = executor;
+        this.scheduledExecutor = scheduledExecutor;
     }
 
     public void setListener(SuggestionListener listener) {
@@ -156,17 +161,12 @@ public class SuggestionController {
     }
 
     private void scheduleRetry(AccountState state, long delayMs) {
-        executor.submit(() -> {
-            try {
-                Thread.sleep(delayMs);
-                // After waiting, try again if no other request happened
-                if (System.currentTimeMillis() - lastRequestTime >= delayMs) {
-                    requestSuggestion(state);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+        scheduledExecutor.schedule(() -> {
+            // After waiting, try again if no other request happened
+            if (System.currentTimeMillis() - lastRequestTime >= delayMs) {
+                requestSuggestion(state);
             }
-        });
+        }, delayMs, TimeUnit.MILLISECONDS);
     }
 
     public void clearSuggestion() {

@@ -100,7 +100,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         // 3. Instantiate controllers
         apiClient = new ApiClient();
         authController = new AuthController(apiClient, config, configManager, flipvaultExecutor);
-        suggestionController = new SuggestionController(apiClient, authController, flipManager, flipvaultExecutor);
+        suggestionController = new SuggestionController(apiClient, authController, flipManager, flipvaultExecutor, scheduledExecutor);
         geOfferHandler = new GEOfferHandler(offerManager, flipManager, sessionManager, flipLogger, apiClient, authController, flipvaultExecutor);
 
         // Wire GE offer state changes to trigger suggestion refresh
@@ -153,8 +153,12 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
             .build();
         clientToolbar.addNavigation(navButton);
 
-        // 6. Register overlay
+        // 6. Register overlay + wire auto-fill feedback
         overlayManager.add(highlightController);
+        highlightController.setOnAutoFillSuccess(() ->
+            panel.getSuggestionPanel().showAutoFillFeedback(true));
+        highlightController.setOnAutoFillFailure(() ->
+            panel.getSuggestionPanel().showAutoFillFeedback(false));
 
         // 7. Register hotkey listener
         keyManager.registerKeyListener(this);
@@ -378,6 +382,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                         sessionManager.load(playerName);
                         flipLogger.setPlayerName(playerName);
                         panel.getKeySelectionPanel().setPlayerName(playerName);
+                        authController.setPendingPlayerName(playerName);
 
                         // Validate stored key if we have one
                         if (authController.getState() == AuthState.VALIDATING) {

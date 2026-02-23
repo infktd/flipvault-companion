@@ -33,9 +33,11 @@ public class HighlightController extends Overlay {
     @Setter
     private Suggestion currentSuggestion;
 
-    // Callback for auto-fill visual feedback
+    // Callbacks for auto-fill visual feedback
     @Setter
     private Runnable onAutoFillSuccess;
+    @Setter
+    private Runnable onAutoFillFailure;
 
     public HighlightController() {
         setPosition(OverlayPosition.DYNAMIC);
@@ -225,6 +227,9 @@ public class HighlightController extends Overlay {
 
         if (!isGEOfferSetupOpen()) {
             log.debug("GE offer setup not open");
+            if (onAutoFillFailure != null) {
+                onAutoFillFailure.run();
+            }
             return;
         }
 
