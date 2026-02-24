@@ -13,7 +13,9 @@ import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
+import net.runelite.client.Notifier;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.input.KeyListener;
@@ -24,6 +26,7 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.game.ItemManager;
+import net.runelite.api.widgets.Widget;
 import net.runelite.client.util.ImageUtil;
 import java.awt.event.KeyEvent;
 
@@ -44,6 +47,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     @Inject private KeyManager keyManager;
     @Inject private HighlightController highlightController;
     @Inject private ItemManager itemManager;
+    @Inject private Notifier notifier;
 
     // Use RuneLite's injected executor for the scheduled tick
     @Inject private ScheduledExecutorService scheduledExecutor;
@@ -71,12 +75,17 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
 
     // State
     private AccountState lastAccountState;
-    private ScheduledFuture<?> tickFuture;
+    private ScheduledFuture<?> saveFuture;
     private ScheduledFuture<?> heartbeatFuture;
     private boolean loggedIn;
     private String sessionStartedIso;
     private long lastPeriodicSaveTime;
     private volatile boolean forceNextSuggest;
+    private volatile Suggestion previousNotifiedSuggestion;
+
+    // Login burst protection (like Flipping Copilot)
+    private static final int LOGIN_BURST_TICKS = 2;
+    private int lastLoginTick = -100;
 
     @Provides
     FlipVaultConfig provideConfig(ConfigManager configManager) {
@@ -106,10 +115,13 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         suggestionController = new SuggestionController(apiClient, authController, flipManager, flipvaultExecutor, scheduledExecutor);
         geOfferHandler = new GEOfferHandler(offerManager, flipManager, sessionManager, flipLogger, apiClient, authController, flipvaultExecutor);
 
-        // Wire GE offer state changes to trigger a fresh snapshot (not stale lastAccountState)
+        // Wire GE offer state changes to flag a suggestion refresh.
+        // Only sets the flag — the 1-second tick picks it up with settled state.
+        // Calling snapshotGameState directly from the event reads transitional
+        // GE data (e.g. price=1 during margin checks) that the server rejects.
         geOfferHandler.setOnStateChangedCallback(() -> {
             if (loggedIn) {
-                clientThread.invokeLater(this::snapshotGameState);
+                forceNextSuggest = true;
             }
         });
 
@@ -128,6 +140,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
             @Override
             public void onSuggestionUpdated(Suggestion suggestion) {
                 suggestionPanel.onSuggestionUpdated(suggestion);
+                handleSuggestionNotifications(suggestion);
                 if (suggestion != null && suggestion.getItemId() > 0
                         && ("BUY".equals(suggestion.getAction()) || "SELL".equals(suggestion.getAction()))) {
                     itemManager.getImage(suggestion.getItemId()).addTo(suggestionPanel.getItemIconLabel());
@@ -204,9 +217,9 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
             });
         }
 
-        // 10. Schedule 1-second tick
-        tickFuture = scheduledExecutor.scheduleAtFixedRate(
-            this::tick, 1, 1, TimeUnit.SECONDS);
+        // 10. Schedule periodic save + auth retry (every 30 seconds)
+        saveFuture = scheduledExecutor.scheduleAtFixedRate(
+            this::periodicTick, 10, 30, TimeUnit.SECONDS);
 
         // 11. Schedule heartbeat (60 seconds)
         heartbeatFuture = scheduledExecutor.scheduleAtFixedRate(
@@ -220,8 +233,8 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         log.info("FlipVault plugin shutting down");
 
         // Cancel scheduled tasks
-        if (tickFuture != null) {
-            tickFuture.cancel(true);
+        if (saveFuture != null) {
+            saveFuture.cancel(true);
         }
         if (heartbeatFuture != null) {
             heartbeatFuture.cancel(true);
@@ -247,6 +260,16 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
             sessionManager.save(playerName);
         }
 
+        // Send Discord webhook if configured
+        String webhookUrl = config.discordWebhookUrl();
+        if (webhookUrl != null && !webhookUrl.isEmpty()) {
+            String playerName = config.boundTo();
+            if (playerName.isEmpty() && lastAccountState != null) {
+                playerName = lastAccountState.getPlayerName();
+            }
+            new WebhookController().sendSessionSummary(webhookUrl, playerName, sessionManager.getStats());
+        }
+
         // Unregister
         overlayManager.remove(highlightController);
         keyManager.unregisterKeyListener(this);
@@ -255,11 +278,32 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         log.info("FlipVault plugin stopped");
     }
 
-    // ---- Tick (1 second) ----
+    // ---- Game tick (0.6s, client thread) — drives suggestion requests ----
+
+    @Subscribe
+    public void onGameTick(GameTick event) {
+        if (!loggedIn) {
+            return;
+        }
+
+        // Skip during login burst — GE slots fire rapid EMPTY→real-state events
+        if (client.getTickCount() <= lastLoginTick + LOGIN_BURST_TICKS) {
+            return;
+        }
+
+        if (authController.getState() != AuthState.VALID) {
+            return;
+        }
+
+        // Already on client thread — read fresh state directly
+        snapshotGameState();
+    }
+
+    // ---- Periodic tick (30s, scheduled executor) — saves + auth retry ----
 
     private static final long PERIODIC_SAVE_INTERVAL_MS = 5 * 60 * 1000L; // 5 minutes
 
-    private void tick() {
+    private void periodicTick() {
         if (!loggedIn) {
             return;
         }
@@ -293,8 +337,6 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                 });
             }
         }
-
-        clientThread.invokeLater(this::snapshotGameState);
     }
 
     private void snapshotGameState() {
@@ -339,6 +381,12 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                         offer.getQuantitySold(),
                         offer.getSpent()
                     );
+                    // Carry over suggestion metadata from offerManager's tracked state
+                    GESlotState tracked = offerManager.getPreviousState(i);
+                    if (tracked != null && tracked.getItemId() == offer.getItemId()) {
+                        geSlots[i].setWasFlipVaultSuggestion(tracked.isWasFlipVaultSuggestion());
+                        geSlots[i].setFlipVaultPriceUsed(tracked.isFlipVaultPriceUsed());
+                    }
                 }
             }
 
@@ -354,11 +402,13 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                 .timestamp(System.currentTimeMillis())
                 .build();
 
-            // Check if state changed or a forced suggest was requested
+            // Check if state changed, forced, or suggestion needed (e.g. 400 recovery)
             boolean changed = offerManager.hasStateChanged(geSlots);
             boolean forced = forceNextSuggest;
-            if (changed || forced) {
+            boolean needed = suggestionController.isSuggestionNeeded();
+            if (changed || forced || needed) {
                 forceNextSuggest = false;
+                suggestionController.setSuggestionNeeded(false);
                 // Update all slot states in offer manager
                 for (int i = 0; i < 8; i++) {
                     offerManager.updateSlot(i, geSlots[i]);
@@ -425,6 +475,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         switch (gameState) {
             case LOGGED_IN:
                 loggedIn = true;
+                lastLoginTick = client.getTickCount();
                 sessionStartedIso = Instant.now().toString();
                 lastPeriodicSaveTime = System.currentTimeMillis();
                 sessionManager.startSession();
@@ -459,6 +510,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                         sessionManager.save(pn);
                     }
                     loggedIn = false;
+                    previousNotifiedSuggestion = null;
                     suggestionController.clearSuggestion();
                     highlightController.setCurrentSuggestion(null);
                 }
@@ -466,6 +518,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                 break;
 
             case HOPPING:
+                lastLoginTick = client.getTickCount();
                 // Save state during world hop
                 if (lastAccountState != null && lastAccountState.getPlayerName() != null) {
                     String hopName = lastAccountState.getPlayerName();
@@ -513,6 +566,34 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         }
     }
 
+    // ---- Suggestion metadata: capture Confirm click ----
+
+    @Subscribe
+    public void onMenuOptionClicked(MenuOptionClicked event) {
+        if (!"Confirm".equals(event.getMenuOption())) {
+            return;
+        }
+        // Only capture when GE offer setup is open
+        Widget offerContainer = client.getWidget(465, 26);
+        if (offerContainer == null || offerContainer.isHidden()) {
+            return;
+        }
+
+        Suggestion suggestion = suggestionController.getCurrentSuggestion();
+        if (suggestion != null && suggestion.getItemId() > 0
+                && ("BUY".equals(suggestion.getAction()) || "SELL".equals(suggestion.getAction()))) {
+            geOfferHandler.setConfirmedSuggestion(
+                suggestion.getItemId(),
+                suggestion.getAction(),
+                suggestion.getPrice()
+            );
+            log.debug("Confirmed suggestion snapshot: item={} action={} price={}",
+                suggestion.getItemId(), suggestion.getAction(), suggestion.getPrice());
+        } else {
+            geOfferHandler.clearConfirmedSuggestion();
+        }
+    }
+
     // ---- KeyListener for Auto-Fill Hotkey ----
 
     @Override
@@ -532,6 +613,84 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     @Override
     public void keyTyped(KeyEvent e) {
         // Not used
+    }
+
+    // ---- Notifications ----
+
+    private void handleSuggestionNotifications(Suggestion suggestion) {
+        if (suggestion == null || "WAIT".equals(suggestion.getAction())) {
+            return;
+        }
+
+        // Skip if same suggestion already notified
+        Suggestion prev = previousNotifiedSuggestion;
+        if (prev != null
+                && prev.getItemId() == suggestion.getItemId()
+                && prev.getAction().equals(suggestion.getAction())) {
+            return;
+        }
+        previousNotifiedSuggestion = suggestion;
+
+        // Build message
+        String msg;
+        String action = suggestion.getAction();
+        if ("BUY".equals(action) || "SELL".equals(action)) {
+            msg = String.format("[FlipVault] %s %s x%d @ %,d gp",
+                action, suggestion.getItemName(), suggestion.getQuantity(), suggestion.getPrice());
+        } else {
+            msg = String.format("[FlipVault] %s %s",
+                action, suggestion.getItemName() != null ? suggestion.getItemName() : "");
+        }
+
+        // Chat notification — only if panel is not the active sidebar tab
+        if (config.chatNotifications() && !panel.isCurrentlyActive()) {
+            String chatMsg = new ChatMessageBuilder()
+                .append(config.chatTextColor(), msg)
+                .build();
+            clientThread.invokeLater(() ->
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", chatMsg, ""));
+        }
+
+        // Tray notification — RuneLite handles focus-check internally
+        if (config.trayNotifications()) {
+            notifier.notify(msg);
+        }
+    }
+
+    // ---- Mis-click Prevention ----
+
+    @Subscribe
+    public void onMenuEntryAdded(MenuEntryAdded event) {
+        if (!config.misClickPrevention()) {
+            return;
+        }
+
+        Suggestion suggestion = suggestionController.getCurrentSuggestion();
+        if (suggestion == null) {
+            return;
+        }
+
+        String action = suggestion.getAction();
+        if (!"BUY".equals(action) && !"SELL".equals(action)) {
+            return;
+        }
+
+        // Only act when GE offer setup is open
+        Widget offerContainer = client.getWidget(465, 26);
+        if (offerContainer == null || offerContainer.isHidden()) {
+            return;
+        }
+
+        if (!"Confirm".equals(event.getOption())) {
+            return;
+        }
+
+        // Check if offer details match the suggestion
+        int offerPrice = client.getVarbitValue(4398);
+        int offerQty = client.getVarbitValue(4396);
+        if (offerPrice != suggestion.getPrice() || offerQty != suggestion.getQuantity()) {
+            event.getMenuEntry().setDeprioritized(true);
+        }
     }
 
     // ---- Helpers ----

@@ -130,6 +130,8 @@ public class ApiClient {
                 slotObj.addProperty("totalQuantity", slot.getTotalQuantity());
                 slotObj.addProperty("quantitySold", slot.getQuantityFilled());
                 slotObj.addProperty("amountSpent", slot.getSpent());
+                slotObj.addProperty("wasFlipVaultSuggestion", slot.isWasFlipVaultSuggestion());
+                slotObj.addProperty("flipVaultPriceUsed", slot.isFlipVaultPriceUsed());
                 geSlotsArray.add(slotObj);
             }
         }
@@ -176,6 +178,8 @@ public class ApiClient {
         body.addProperty("profit", tx.getProfit());
         body.addProperty("buyTimestamp", epochMillisToIso(tx.getBuyTimestamp()));
         body.addProperty("sellTimestamp", epochMillisToIso(tx.getSellTimestamp()));
+        body.addProperty("wasFlipVaultSuggestion", tx.isWasFlipVaultSuggestion());
+        body.addProperty("flipVaultPriceUsed", tx.isFlipVaultPriceUsed());
         postAuthenticated("/transaction", body);
     }
 

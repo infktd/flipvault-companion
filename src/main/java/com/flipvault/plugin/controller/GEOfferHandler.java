@@ -26,6 +26,11 @@ public class GEOfferHandler {
     // Listener for when state changes are detected (triggers suggestion refresh)
     private Runnable onStateChangedCallback;
 
+    // Confirmed suggestion snapshot — set by FlipVaultPlugin on Confirm click
+    private volatile int confirmedSuggestionItemId = -1;
+    private volatile String confirmedSuggestionDirection;
+    private volatile int confirmedSuggestionPrice = -1;
+
     public GEOfferHandler(OfferManager offerManager, FlipManager flipManager,
                           SessionManager sessionManager, FlipLogger flipLogger,
                           ApiClient apiClient, AuthController authController,
@@ -43,11 +48,41 @@ public class GEOfferHandler {
         this.onStateChangedCallback = callback;
     }
 
+    public void setConfirmedSuggestion(int itemId, String direction, int price) {
+        this.confirmedSuggestionItemId = itemId;
+        this.confirmedSuggestionDirection = direction;
+        this.confirmedSuggestionPrice = price;
+    }
+
+    public void clearConfirmedSuggestion() {
+        this.confirmedSuggestionItemId = -1;
+        this.confirmedSuggestionDirection = null;
+        this.confirmedSuggestionPrice = -1;
+    }
+
     public void onOfferChanged(GrandExchangeOfferChanged event) {
         int slot = event.getSlot();
         GrandExchangeOffer offer = event.getOffer();
         GESlotState newState = mapOffer(slot, offer);
         GESlotState prevState = offerManager.getPreviousState(slot);
+
+        // Compute suggestion metadata flags
+        if (newState.getStatus() != SlotStatus.EMPTY) {
+            if (isNewOffer(prevState, newState)) {
+                boolean wasSuggestion = newState.getItemId() == confirmedSuggestionItemId
+                    && directionMatches(newState.getStatus(), confirmedSuggestionDirection);
+                boolean priceUsed = wasSuggestion
+                    && newState.getPrice() == confirmedSuggestionPrice;
+                newState.setWasFlipVaultSuggestion(wasSuggestion);
+                newState.setFlipVaultPriceUsed(priceUsed);
+                // Clear snapshot after use
+                confirmedSuggestionItemId = -1;
+            } else if (prevState != null) {
+                // Ongoing offer — inherit flags from previous state
+                newState.setWasFlipVaultSuggestion(prevState.isWasFlipVaultSuggestion());
+                newState.setFlipVaultPriceUsed(prevState.isFlipVaultPriceUsed());
+            }
+        }
 
         if (prevState != null && newState != null) {
             processTransition(prevState, newState);
@@ -87,6 +122,8 @@ public class GEOfferHandler {
                 current.getQuantityFilled()
             );
             if (tx != null) {
+                tx.setWasFlipVaultSuggestion(current.isWasFlipVaultSuggestion());
+                tx.setFlipVaultPriceUsed(current.isFlipVaultPriceUsed());
                 sessionManager.recordFlip(tx.getProfit());
                 flipLogger.logFlip(tx);
                 reportTransaction(tx);
@@ -113,6 +150,28 @@ public class GEOfferHandler {
                 // Could add to a retry queue here for other errors
             }
         });
+    }
+
+    private boolean isNewOffer(GESlotState prev, GESlotState curr) {
+        if (prev == null || prev.getStatus() == SlotStatus.EMPTY) {
+            return true;
+        }
+        return prev.getItemId() != curr.getItemId()
+            || prev.getPrice() != curr.getPrice()
+            || prev.getTotalQuantity() != curr.getTotalQuantity();
+    }
+
+    private boolean directionMatches(SlotStatus status, String direction) {
+        if (direction == null) {
+            return false;
+        }
+        if ("BUY".equals(direction)) {
+            return status == SlotStatus.BUYING || status == SlotStatus.BUY_COMPLETE;
+        }
+        if ("SELL".equals(direction)) {
+            return status == SlotStatus.SELLING || status == SlotStatus.SELL_COMPLETE;
+        }
+        return false;
     }
 
     private GESlotState mapOffer(int slot, GrandExchangeOffer offer) {

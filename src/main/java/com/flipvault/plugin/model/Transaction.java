@@ -13,4 +13,8 @@ public class Transaction {
     private long profit;
     private long buyTimestamp;
     private long sellTimestamp;
+
+    // Suggestion metadata
+    private boolean wasFlipVaultSuggestion;
+    private boolean flipVaultPriceUsed;
 }
