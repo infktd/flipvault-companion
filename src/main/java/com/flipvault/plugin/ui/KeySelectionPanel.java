@@ -155,6 +155,12 @@ public class KeySelectionPanel extends JPanel {
             showError("Please select a key");
             return;
         }
+        // Fall back to authController's pendingPlayerName if not set directly
+        if ((playerName == null || playerName.isEmpty())
+                && authController.getPendingPlayerName() != null
+                && !authController.getPendingPlayerName().isEmpty()) {
+            playerName = authController.getPendingPlayerName();
+        }
         if (playerName == null || playerName.isEmpty()) {
             showError("Log into OSRS first");
             return;

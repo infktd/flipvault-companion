@@ -3,33 +3,50 @@ plugins {
 }
 
 repositories {
+    mavenLocal()
+    maven {
+        url = 'https://repo.runelite.net'
+        content {
+            includeGroupByRegex("net\\.runelite.*")
+        }
+    }
     mavenCentral()
-    maven { url 'https://repo.runelite.net' }
 }
 
+def runeLiteVersion = 'latest.release'
+
 dependencies {
-    compileOnly 'net.runelite:client:1.12.17'
+    compileOnly group: 'net.runelite', name: 'client', version: runeLiteVersion
     compileOnly 'com.squareup.okhttp3:okhttp:4.12.0'
+
     compileOnly 'org.projectlombok:lombok:1.18.40'
     annotationProcessor 'org.projectlombok:lombok:1.18.40'
 
-    testImplementation 'junit:junit:4.13.2'
-    testCompileOnly 'org.projectlombok:lombok:1.18.40'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.40'
+    testImplementation 'junit:junit:4.12'
+    testImplementation group: 'net.runelite', name: 'client', version: runeLiteVersion
+    testImplementation group: 'net.runelite', name: 'jshell', version: runeLiteVersion
 }
 
 group = 'com.flipvault'
 version = '0.1.0'
 
-// No toolchain block - use host Java 25 with release flag for Java 11 bytecode
 tasks.withType(JavaCompile).configureEach {
-    options.release.set(11)
     options.encoding = 'UTF-8'
+    options.release.set(11)
 }
 
-jar {
-    manifest {
-        attributes 'Implementation-Title': 'FlipVault Companion'
-        attributes 'Implementation-Version': archiveVersion
-    }
+// Don't fail when no JUnit tests are found (the test class is a launcher, not a test)
+test {
+    failOnNoDiscoveredTests = false
+}
+
+tasks.register('run', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.flipvault.plugin.FlipVaultPluginTest'
+
+    jvmArgs "-ea",
+        "--add-opens", "java.desktop/com.apple.eawt=ALL-UNNAMED",
+        "--add-exports", "java.desktop/com.apple.eawt=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED"
+    args "--developer-mode", "--debug"
 }

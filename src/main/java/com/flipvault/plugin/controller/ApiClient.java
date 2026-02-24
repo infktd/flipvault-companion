@@ -10,6 +10,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
 import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
@@ -21,6 +22,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
+@Slf4j
 public class ApiClient {
     private static final String BASE_URL = "https://api.flipvault.app/api/plugin";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -69,10 +71,11 @@ public class ApiClient {
      *
      * @return JSON with apiKey, boundTo, plan, expiresAt
      */
-    public JsonObject activateKey(String keyId, String playerName) throws ApiException {
+    public JsonObject activateKey(String keyId, String playerName, String sessionToken) throws ApiException {
         JsonObject body = new JsonObject();
         body.addProperty("keyId", keyId);
         body.addProperty("playerName", playerName);
+        body.addProperty("sessionToken", sessionToken);
         return post("/activate-key", body);
     }
 
@@ -107,7 +110,7 @@ public class ApiClient {
      *
      * @return a Suggestion parsed from the response
      */
-    public Suggestion requestSuggestion(AccountState state, List<ActiveFlip> activeFlips) throws ApiException {
+    public Suggestion requestSuggestion(AccountState state, List<ActiveFlip> activeFlips, Suggestion lastSuggestion) throws ApiException {
         JsonObject body = new JsonObject();
         body.addProperty("playerName", state.getPlayerName());
         body.addProperty("cashStack", state.getCashStack());
@@ -125,8 +128,8 @@ public class ApiClient {
                 slotObj.addProperty("itemId", slot.getItemId());
                 slotObj.addProperty("price", slot.getPrice());
                 slotObj.addProperty("totalQuantity", slot.getTotalQuantity());
-                slotObj.addProperty("quantityFilled", slot.getQuantityFilled());
-                slotObj.addProperty("spent", slot.getSpent());
+                slotObj.addProperty("quantitySold", slot.getQuantityFilled());
+                slotObj.addProperty("amountSpent", slot.getSpent());
                 geSlotsArray.add(slotObj);
             }
         }
@@ -147,6 +150,15 @@ public class ApiClient {
         }
         body.add("activeFlips", activeFlipsArray);
 
+        // Include last suggestion so server can avoid repeating it
+        if (lastSuggestion != null) {
+            JsonObject lastObj = new JsonObject();
+            lastObj.addProperty("itemId", lastSuggestion.getItemId());
+            lastObj.addProperty("action", lastSuggestion.getAction());
+            body.add("lastSuggestion", lastObj);
+        }
+
+        log.debug("Suggest request body: {}", body.toString());
         JsonObject response = postAuthenticated("/suggest", body);
         return gson.fromJson(response, Suggestion.class);
     }
@@ -165,6 +177,18 @@ public class ApiClient {
         body.addProperty("buyTimestamp", epochMillisToIso(tx.getBuyTimestamp()));
         body.addProperty("sellTimestamp", epochMillisToIso(tx.getSellTimestamp()));
         postAuthenticated("/transaction", body);
+    }
+
+    /**
+     * Poll for browser auth completion.
+     * Does NOT send X-API-Key header.
+     *
+     * @return JSON with status ("pending"|"completed"|"expired") and optionally keys array
+     */
+    public JsonObject pollBrowserAuth(String sessionNonce) throws ApiException {
+        JsonObject body = new JsonObject();
+        body.addProperty("sessionNonce", sessionNonce);
+        return post("/browser-auth/poll", body);
     }
 
     // ---- Internal helpers ----

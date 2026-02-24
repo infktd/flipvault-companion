@@ -67,6 +67,8 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
     private JLabel sessionFlipsLabel;
     private JLabel connectionStatusLabel;
     private JLabel versionLabel;
+    private JLabel logoutLabel;
+    private JLabel premiumLabel;
 
     // Auth controller reference for conflict panel
     private final AuthController authController;
@@ -146,6 +148,12 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
 
     @Override
     public void onAuthStateChanged(AuthState newState) {
+        // Show logout when authenticated, validating, or selecting key
+        logoutLabel.setVisible(newState == AuthState.VALID
+            || newState == AuthState.VALIDATING
+            || newState == AuthState.SELECTING_KEY
+            || newState == AuthState.KEY_CONFLICT);
+
         switch (newState) {
             case NO_KEY:
             case EXPIRED:
@@ -153,6 +161,7 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
                 loginPanel.onAuthStateChanged(newState);
                 break;
             case LOGGING_IN:
+            case POLLING_BROWSER:
                 loginPanel.onAuthStateChanged(newState);
                 break;
             case SELECTING_KEY:
@@ -163,6 +172,7 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
                 mainCardLayout.show(mainCardPanel, CARD_VALIDATING);
                 break;
             case VALID:
+                updatePlanBadge(authController.getPlan());
                 mainCardLayout.show(mainCardPanel, CARD_MAIN);
                 break;
             case KEY_CONFLICT:
@@ -186,6 +196,16 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
         sessionProfitLabel.setText("Session: " + stats.getFormattedProfit());
         sessionProfitLabel.setForeground(stats.getTotalProfit() >= 0 ? COLOR_BUY : COLOR_SELL);
         sessionFlipsLabel.setText("Flips: " + stats.getFlipsDone());
+    }
+
+    public void updatePlanBadge(String plan) {
+        if ("pro".equalsIgnoreCase(plan) || "premium".equalsIgnoreCase(plan)) {
+            premiumLabel.setText("Pro");
+            premiumLabel.setForeground(COLOR_CYAN);
+        } else {
+            premiumLabel.setText("Free");
+            premiumLabel.setForeground(COLOR_MUTED);
+        }
     }
 
     public void setConnected(boolean connected) {
@@ -223,11 +243,28 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
         titleLabel.setForeground(Color.WHITE);
         header.add(titleLabel, BorderLayout.WEST);
 
-        JLabel premiumLabel = new JLabel("PREMIUM");
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        rightPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+        logoutLabel = new JLabel("Logout");
+        logoutLabel.setFont(FontManager.getRunescapeSmallFont());
+        logoutLabel.setForeground(COLOR_MUTED);
+        logoutLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        logoutLabel.setVisible(false);
+        logoutLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                authController.resetToLogin();
+            }
+        });
+        rightPanel.add(logoutLabel);
+
+        premiumLabel = new JLabel("Free");
         premiumLabel.setFont(FontManager.getRunescapeSmallFont());
-        premiumLabel.setForeground(COLOR_CYAN);
-        premiumLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        header.add(premiumLabel, BorderLayout.EAST);
+        premiumLabel.setForeground(COLOR_MUTED);
+        rightPanel.add(premiumLabel);
+
+        header.add(rightPanel, BorderLayout.EAST);
 
         return header;
     }
@@ -333,7 +370,7 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(40, 10, 40, 10));
 
-        JLabel label = new JLabel("Validating API key...");
+        JLabel label = new JLabel("<html><center>Log in to a game world<br>to get started</center></html>");
         label.setForeground(COLOR_MUTED);
         label.setFont(FontManager.getRunescapeSmallFont());
         label.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -413,7 +450,7 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
 
         JButton retryBtn = new JButton("Retry");
         retryBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        retryBtn.addActionListener(e -> authController.resetToLogin());
+        retryBtn.addActionListener(e -> authController.retryValidation());
         panel.add(retryBtn);
 
         return panel;

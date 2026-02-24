@@ -6,12 +6,9 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
@@ -40,11 +37,11 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
     private final JPanel cardPanel;
 
     // Suggestion display labels
+    private JLabel itemIconLabel;
     private JLabel itemNameLabel;
     private JLabel actionBadge;
     private JLabel priceQtyLabel;
     private JLabel profitLabel;
-    private JLabel gpHrLabel;
     private JTextArea reasonArea;
 
     // Collect / cancel labels
@@ -53,8 +50,6 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
 
     // Auto-fill feedback
     private JLabel filledLabel;
-
-    private Runnable refreshCallback;
 
     public SuggestionPanel() {
         setLayout(new BorderLayout());
@@ -77,8 +72,22 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         cardLayout.show(cardPanel, CARD_EMPTY);
     }
 
-    public void setRefreshCallback(Runnable callback) {
-        this.refreshCallback = callback;
+    /**
+     * Returns the item icon label so callers can use AsyncBufferedImage.addTo().
+     */
+    public JLabel getItemIconLabel() {
+        return itemIconLabel;
+    }
+
+    /**
+     * Clear the item icon (e.g. when switching away from BUY/SELL).
+     */
+    public void clearItemImage() {
+        SwingUtilities.invokeLater(() -> {
+            itemIconLabel.setIcon(null);
+            revalidate();
+            repaint();
+        });
     }
 
     // ---- SuggestionListener implementation ----
@@ -116,8 +125,6 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
 
             profitLabel.setText("Est. profit: " + formatGp(suggestion.getEstimatedProfit()));
             profitLabel.setForeground(suggestion.getEstimatedProfit() >= 0 ? COLOR_BUY : COLOR_SELL);
-
-            gpHrLabel.setText("Est. GP/hr: " + formatGp(suggestion.getEstimatedGpPerHour()));
 
             String reason = suggestion.getReason();
             if (reason != null && !reason.isEmpty()) {
@@ -172,16 +179,20 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // Header row: item name + action badge
-        JPanel headerRow = new JPanel(new BorderLayout());
+        // Header row: [icon] [itemName] ... [actionBadge]
+        JPanel headerRow = new JPanel(new BorderLayout(4, 0));
         headerRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         headerRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        headerRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+        headerRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+
+        itemIconLabel = new JLabel();
+        itemIconLabel.setPreferredSize(new Dimension(36, 32));
+        headerRow.add(itemIconLabel, BorderLayout.WEST);
 
         itemNameLabel = new JLabel();
         itemNameLabel.setFont(FontManager.getRunescapeBoldFont());
         itemNameLabel.setForeground(COLOR_BUY);
-        headerRow.add(itemNameLabel, BorderLayout.WEST);
+        headerRow.add(itemNameLabel, BorderLayout.CENTER);
 
         actionBadge = new JLabel();
         actionBadge.setFont(FontManager.getRunescapeBoldFont());
@@ -206,14 +217,6 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         profitLabel.setFont(FontManager.getRunescapeSmallFont());
         profitLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         panel.add(profitLabel);
-        panel.add(Box.createVerticalStrut(2));
-
-        // GP/hr
-        gpHrLabel = new JLabel();
-        gpHrLabel.setForeground(Color.WHITE);
-        gpHrLabel.setFont(FontManager.getRunescapeSmallFont());
-        gpHrLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(gpHrLabel);
         panel.add(Box.createVerticalStrut(8));
 
         // Reason area (muted, smaller font, wrapping)
@@ -237,10 +240,6 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         filledLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         filledLabel.setVisible(false);
         panel.add(filledLabel);
-        panel.add(Box.createVerticalStrut(6));
-
-        // Bottom buttons
-        panel.add(buildButtonBar());
 
         return panel;
     }
@@ -256,11 +255,6 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         label.setFont(FontManager.getRunescapeSmallFont());
         label.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(label);
-        panel.add(Box.createVerticalStrut(16));
-
-        JButton refreshBtn = createRefreshButton();
-        refreshBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(refreshBtn);
 
         return panel;
     }
@@ -277,16 +271,6 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         errorMsg.setFont(FontManager.getRunescapeSmallFont());
         errorMsg.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(errorMsg);
-        panel.add(Box.createVerticalStrut(16));
-
-        JButton retryBtn = new JButton("Retry");
-        retryBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        retryBtn.addActionListener(e -> {
-            if (refreshCallback != null) {
-                refreshCallback.run();
-            }
-        });
-        panel.add(retryBtn);
 
         return panel;
     }
@@ -317,11 +301,6 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         collectLabel.setFont(FontManager.getRunescapeBoldFont());
         collectLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(collectLabel);
-        panel.add(Box.createVerticalStrut(16));
-
-        JButton refreshBtn = createRefreshButton();
-        refreshBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(refreshBtn);
 
         return panel;
     }
@@ -337,58 +316,8 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         cancelLabel.setFont(FontManager.getRunescapeBoldFont());
         cancelLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(cancelLabel);
-        panel.add(Box.createVerticalStrut(16));
-
-        JButton refreshBtn = createRefreshButton();
-        refreshBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(refreshBtn);
 
         return panel;
-    }
-
-    private JPanel buildButtonBar() {
-        JPanel bar = new JPanel();
-        bar.setLayout(new BoxLayout(bar, BoxLayout.Y_AXIS));
-        bar.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        bar.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        // Dashboard link
-        JLabel dashLink = new JLabel("Open FlipVault \u2192");
-        dashLink.setForeground(COLOR_CYAN);
-        dashLink.setFont(FontManager.getRunescapeSmallFont());
-        dashLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        dashLink.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JPanel linkWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        linkWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        linkWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
-        linkWrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, 20));
-        linkWrapper.add(dashLink);
-        bar.add(linkWrapper);
-        bar.add(Box.createVerticalStrut(6));
-
-        // Refresh button
-        JButton refreshBtn = createRefreshButton();
-        refreshBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JPanel btnWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        btnWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        btnWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
-        btnWrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        btnWrapper.add(refreshBtn);
-        bar.add(btnWrapper);
-
-        return bar;
-    }
-
-    private JButton createRefreshButton() {
-        JButton btn = new JButton("Refresh");
-        btn.addActionListener(e -> {
-            if (refreshCallback != null) {
-                refreshCallback.run();
-            }
-        });
-        return btn;
     }
 
     // ---- Auto-fill feedback ----

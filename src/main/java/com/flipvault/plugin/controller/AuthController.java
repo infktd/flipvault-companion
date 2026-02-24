@@ -7,8 +7,11 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.awt.Desktop;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import javax.swing.SwingUtilities;
@@ -34,6 +37,16 @@ public class AuthController {
     private volatile String conflictPlayerName = "";
     @Getter @Setter
     private volatile String pendingPlayerName = "";
+    @Getter
+    private volatile String plan;
+
+    private volatile String sessionToken;
+    private volatile String browserAuthNonce;
+    private volatile boolean browserAuthCancelled;
+    private volatile boolean validationInFlight;
+
+    private static final int BROWSER_AUTH_POLL_INTERVAL_MS = 3000;
+    private static final int BROWSER_AUTH_TIMEOUT_MS = 5 * 60 * 1000;
 
     private final List<AuthStateListener> listeners = new CopyOnWriteArrayList<>();
 
@@ -88,6 +101,7 @@ public class AuthController {
         executor.submit(() -> {
             try {
                 JsonObject response = apiClient.login(email, password);
+                sessionToken = response.has("sessionToken") ? response.get("sessionToken").getAsString() : null;
                 List<ApiKey> keys = parseKeys(response);
                 availableKeys = keys;
 
@@ -117,9 +131,10 @@ public class AuthController {
         setState(AuthState.VALIDATING);
         executor.submit(() -> {
             try {
-                JsonObject response = apiClient.activateKey(keyId, playerName);
+                JsonObject response = apiClient.activateKey(keyId, playerName, sessionToken);
                 String fullApiKey = response.get("apiKey").getAsString();
                 String boundTo = response.get("boundTo").getAsString();
+                plan = response.has("plan") ? response.get("plan").getAsString() : null;
 
                 // Find the label for this key
                 String label = "";
@@ -158,11 +173,14 @@ public class AuthController {
      * Validates the stored API key with the backend.
      */
     public void validateKey(String playerName) {
+        if (validationInFlight) return;
+        validationInFlight = true;
         executor.submit(() -> {
             try {
                 JsonObject response = apiClient.validateKey(playerName);
                 boolean valid = response.has("valid") && response.get("valid").getAsBoolean();
                 if (valid) {
+                    plan = response.has("plan") ? response.get("plan").getAsString() : null;
                     setState(AuthState.VALID);
                 } else {
                     String reason = response.has("reason") ? response.get("reason").getAsString() : "Key invalid";
@@ -194,8 +212,107 @@ public class AuthController {
                 } else {
                     setState(AuthState.ERROR);
                 }
+            } catch (Exception e) {
+                // Safety net — ensure we never get stuck in VALIDATING
+                log.error("Unexpected error during key validation", e);
+                errorMessage = "Validation failed: " + e.getMessage();
+                setState(AuthState.ERROR);
+            } finally {
+                validationInFlight = false;
             }
         });
+    }
+
+    /**
+     * Called from LoginPanel Discord button. Opens the FlipVault login page
+     * in the browser with a session nonce, then polls until auth completes.
+     */
+    public void loginViaBrowser() {
+        browserAuthCancelled = false;
+        browserAuthNonce = UUID.randomUUID().toString();
+
+        final String nonce = browserAuthNonce;
+        final String loginUrl = "https://flipvault.app/login?plugin_session=" + nonce;
+
+        if (!openBrowser(loginUrl)) {
+            errorMessage = "Could not open browser. Visit: " + loginUrl;
+            setState(AuthState.ERROR);
+            return;
+        }
+
+        setState(AuthState.POLLING_BROWSER);
+        executor.submit(() -> {
+            try {
+                long startTime = System.currentTimeMillis();
+                while (!browserAuthCancelled) {
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    if (elapsed >= BROWSER_AUTH_TIMEOUT_MS) {
+                        errorMessage = "Browser login timed out. Please try again.";
+                        setState(AuthState.NO_KEY);
+                        return;
+                    }
+
+                    Thread.sleep(BROWSER_AUTH_POLL_INTERVAL_MS);
+
+                    if (browserAuthCancelled) {
+                        break;
+                    }
+
+                    JsonObject pollResponse = apiClient.pollBrowserAuth(nonce);
+                    String status = pollResponse.get("status").getAsString();
+
+                    if ("completed".equals(status)) {
+                        sessionToken = pollResponse.has("sessionToken") ? pollResponse.get("sessionToken").getAsString() : null;
+                        List<ApiKey> keys = parseKeys(pollResponse);
+                        availableKeys = keys;
+
+                        if (keys.size() == 1 && pendingPlayerName != null && !pendingPlayerName.isEmpty()) {
+                            log.debug("Single key found via browser auth, auto-activating for player: {}", pendingPlayerName);
+                            activateKey(keys.get(0).getId(), pendingPlayerName);
+                        } else {
+                            setState(AuthState.SELECTING_KEY);
+                        }
+                        return;
+                    } else if ("expired".equals(status)) {
+                        errorMessage = "Browser session expired. Please try again.";
+                        setState(AuthState.NO_KEY);
+                        return;
+                    }
+                    // "pending" — continue polling
+                }
+
+                // Cancelled
+                setState(AuthState.NO_KEY);
+            } catch (ApiException e) {
+                errorMessage = e.getMessage();
+                setState(AuthState.ERROR);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                setState(AuthState.NO_KEY);
+            }
+        });
+    }
+
+    /**
+     * Cancel an in-progress browser auth polling loop.
+     */
+    public void cancelBrowserAuth() {
+        browserAuthCancelled = true;
+    }
+
+    /**
+     * Open a URL in the user's default browser.
+     */
+    private boolean openBrowser(String url) {
+        try {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(new URI(url));
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to open browser: {}", e.getMessage());
+        }
+        return false;
     }
 
     /**
@@ -205,6 +322,29 @@ public class AuthController {
     public void onUnauthorized() {
         clearStoredKey();
         setState(AuthState.EXPIRED);
+    }
+
+    /**
+     * Retry validation using the existing stored key.
+     * If no stored key exists, falls back to resetToLogin.
+     */
+    public void retryValidation() {
+        String key = config.apiKey();
+        if (key == null || key.isEmpty()) {
+            resetToLogin();
+            return;
+        }
+        String playerName = pendingPlayerName;
+        if (playerName == null || playerName.isEmpty()) {
+            // Can't validate without a player name — stay in VALIDATING
+            // until onGameStateChanged(LOGGED_IN) provides one
+            apiClient.setApiKey(key);
+            setState(AuthState.VALIDATING);
+            return;
+        }
+        apiClient.setApiKey(key);
+        setState(AuthState.VALIDATING);
+        validateKey(playerName);
     }
 
     /**

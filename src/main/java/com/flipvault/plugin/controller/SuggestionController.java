@@ -20,6 +20,7 @@ public class SuggestionController {
     private static final long NETWORK_ERROR_RETRY_MS = 10000;
     private static final long SERVER_ERROR_RETRY_MS = 30000;
     private static final long TIMEOUT_RETRY_MS = 5000;
+    private static final long BAD_REQUEST_RETRY_MS = 3000;
 
     private final ApiClient apiClient;
     private final AuthController authController;
@@ -31,6 +32,7 @@ public class SuggestionController {
     private volatile Suggestion currentSuggestion;
     private volatile long lastRequestTime;
     private volatile boolean requestInFlight;
+    private volatile AccountState pendingState;
 
     private SuggestionListener listener;
 
@@ -58,7 +60,26 @@ public class SuggestionController {
      * Called when game state changes. Decides whether to request a new suggestion.
      */
     public void onStateChanged(AccountState state) {
-        if (!shouldRequest(state)) return;
+        if (state == null || state.getPlayerName() == null) {
+            return;
+        }
+
+        if (requestInFlight || System.currentTimeMillis() - lastRequestTime < MIN_REQUEST_INTERVAL_MS) {
+            // Rate-limited or in-flight — store for deferred send
+            pendingState = state;
+            scheduleDeferredRequest();
+            return;
+        }
+
+        if (state.getFreeSlots() == 0) {
+            if (listener != null) {
+                SwingUtilities.invokeLater(() ->
+                    listener.onSuggestionError("All GE slots in use"));
+            }
+            return;
+        }
+
+        pendingState = null;
         requestSuggestion(state);
     }
 
@@ -67,28 +88,27 @@ public class SuggestionController {
      */
     public void refresh(AccountState state) {
         lastRequestTime = 0;
+        pendingState = null;
         requestSuggestion(state);
     }
 
-    private boolean shouldRequest(AccountState state) {
-        if (state == null || state.getPlayerName() == null) {
-            return false;
-        }
-        if (requestInFlight) {
-            return false;
-        }
-        if (System.currentTimeMillis() - lastRequestTime < MIN_REQUEST_INTERVAL_MS) {
-            return false;
-        }
-        if (state.getFreeSlots() == 0) {
-            // All slots occupied - update UI to say so
-            if (listener != null) {
-                SwingUtilities.invokeLater(() ->
-                    listener.onSuggestionError("All GE slots in use"));
+    private void scheduleDeferredRequest() {
+        long elapsed = System.currentTimeMillis() - lastRequestTime;
+        long delay = Math.max(MIN_REQUEST_INTERVAL_MS - elapsed, 100);
+        scheduledExecutor.schedule(() -> {
+            AccountState state = pendingState;
+            if (state != null && !requestInFlight) {
+                pendingState = null;
+                if (state.getFreeSlots() == 0) {
+                    if (listener != null) {
+                        SwingUtilities.invokeLater(() ->
+                            listener.onSuggestionError("All GE slots in use"));
+                    }
+                    return;
+                }
+                requestSuggestion(state);
             }
-            return false;
-        }
-        return true;
+        }, delay, TimeUnit.MILLISECONDS);
     }
 
     private void requestSuggestion(AccountState state) {
@@ -105,7 +125,7 @@ public class SuggestionController {
         executor.submit(() -> {
             try {
                 List<ActiveFlip> activeFlips = flipManager.getActiveFlips();
-                Suggestion suggestion = apiClient.requestSuggestion(state, activeFlips);
+                Suggestion suggestion = apiClient.requestSuggestion(state, activeFlips, currentSuggestion);
                 currentSuggestion = suggestion;
 
                 log.debug("Suggestion received: {} {} x{} @ {}",
@@ -137,6 +157,9 @@ public class SuggestionController {
                 if (status == 401) {
                     // Auth expired - don't retry, let auth controller handle it
                     authController.onUnauthorized();
+                } else if (status == 400) {
+                    // Bad request (likely transient invalid state) - retry after 3s
+                    scheduleRetry(state, BAD_REQUEST_RETRY_MS);
                 } else if (status >= 500) {
                     // Server error - retry after 30s
                     scheduleRetry(state, SERVER_ERROR_RETRY_MS);
@@ -147,7 +170,7 @@ public class SuggestionController {
                     // Other network error - retry after 10s
                     scheduleRetry(state, NETWORK_ERROR_RETRY_MS);
                 }
-                // For 4xx (other than 401), don't auto-retry
+                // For other 4xx (other than 400/401), don't auto-retry
             } finally {
                 requestInFlight = false;
             }
@@ -162,8 +185,12 @@ public class SuggestionController {
 
     private void scheduleRetry(AccountState state, long delayMs) {
         scheduledExecutor.schedule(() -> {
-            // After waiting, try again if no other request happened
-            if (System.currentTimeMillis() - lastRequestTime >= delayMs) {
+            // Use pending state if available (it's newer), otherwise use the original
+            AccountState latest = pendingState;
+            if (latest != null) {
+                pendingState = null;
+                requestSuggestion(latest);
+            } else if (System.currentTimeMillis() - lastRequestTime >= delayMs) {
                 requestSuggestion(state);
             }
         }, delayMs, TimeUnit.MILLISECONDS);
@@ -171,6 +198,7 @@ public class SuggestionController {
 
     public void clearSuggestion() {
         currentSuggestion = null;
+        pendingState = null;
         if (listener != null) {
             SwingUtilities.invokeLater(() -> listener.onSuggestionUpdated(null));
         }

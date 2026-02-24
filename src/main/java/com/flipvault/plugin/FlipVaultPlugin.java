@@ -23,6 +23,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.ImageUtil;
 import java.awt.event.KeyEvent;
 
@@ -42,6 +43,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     @Inject private OverlayManager overlayManager;
     @Inject private KeyManager keyManager;
     @Inject private HighlightController highlightController;
+    @Inject private ItemManager itemManager;
 
     // Use RuneLite's injected executor for the scheduled tick
     @Inject private ScheduledExecutorService scheduledExecutor;
@@ -74,6 +76,7 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     private boolean loggedIn;
     private String sessionStartedIso;
     private long lastPeriodicSaveTime;
+    private volatile boolean forceNextSuggest;
 
     @Provides
     FlipVaultConfig provideConfig(ConfigManager configManager) {
@@ -103,10 +106,10 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         suggestionController = new SuggestionController(apiClient, authController, flipManager, flipvaultExecutor, scheduledExecutor);
         geOfferHandler = new GEOfferHandler(offerManager, flipManager, sessionManager, flipLogger, apiClient, authController, flipvaultExecutor);
 
-        // Wire GE offer state changes to trigger suggestion refresh
+        // Wire GE offer state changes to trigger a fresh snapshot (not stale lastAccountState)
         geOfferHandler.setOnStateChangedCallback(() -> {
-            if (loggedIn && lastAccountState != null) {
-                suggestionController.onStateChanged(lastAccountState);
+            if (loggedIn) {
+                clientThread.invokeLater(this::snapshotGameState);
             }
         });
 
@@ -120,25 +123,40 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         panel = new FlipVaultPanel(authController, loginPanel, keySelectionPanel,
             suggestionPanel, activeFlipsPanel, statsPanel);
 
-        // Wire suggestion updates to the panel's suggestion sub-panel
-        suggestionController.setListener(suggestionPanel);
+        // Wire suggestion updates to the panel — also load item icons
+        suggestionController.setListener(new SuggestionController.SuggestionListener() {
+            @Override
+            public void onSuggestionUpdated(Suggestion suggestion) {
+                suggestionPanel.onSuggestionUpdated(suggestion);
+                if (suggestion != null && suggestion.getItemId() > 0
+                        && ("BUY".equals(suggestion.getAction()) || "SELL".equals(suggestion.getAction()))) {
+                    itemManager.getImage(suggestion.getItemId()).addTo(suggestionPanel.getItemIconLabel());
+                } else {
+                    suggestionPanel.clearItemImage();
+                }
+            }
 
-        // Wire suggestion panel refresh callback to trigger a new suggestion request
-        suggestionPanel.setRefreshCallback(() -> {
-            if (lastAccountState != null) {
-                suggestionController.refresh(lastAccountState);
+            @Override
+            public void onSuggestionError(String error) {
+                suggestionPanel.onSuggestionError(error);
+            }
+
+            @Override
+            public void onSuggestionLoading() {
+                suggestionPanel.onSuggestionLoading();
             }
         });
 
         // Wire auth state changes to panel
         authController.addListener(panel);
-        // Also propagate player name to key selection when auth becomes VALID
+        // Propagate player name to key selection on auth state changes
         authController.addListener(state -> {
-            if (state == AuthState.VALID && loggedIn) {
+            if ((state == AuthState.VALID || state == AuthState.SELECTING_KEY) && loggedIn) {
                 String playerName = client.getLocalPlayer() != null
                     ? client.getLocalPlayer().getName() : null;
                 if (playerName != null) {
                     panel.getKeySelectionPanel().setPlayerName(playerName);
+                    authController.setPendingPlayerName(playerName);
                 }
             }
         });
@@ -166,11 +184,31 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
         // 8. Check auth on startup
         authController.checkStoredKey();
 
-        // 9. Schedule 1-second tick
+        // 9. Detect player name if already logged in, and validate key
+        if (client.getGameState() == GameState.LOGGED_IN) {
+            loggedIn = true;
+            clientThread.invokeLater(() -> {
+                Player localPlayer = client.getLocalPlayer();
+                if (localPlayer != null && localPlayer.getName() != null) {
+                    String playerName = localPlayer.getName();
+                    panel.getKeySelectionPanel().setPlayerName(playerName);
+                    authController.setPendingPlayerName(playerName);
+                    offerManager.load(playerName);
+                    sessionManager.load(playerName);
+                    flipLogger.setPlayerName(playerName);
+
+                    if (authController.getState() == AuthState.VALIDATING) {
+                        authController.validateKey(playerName);
+                    }
+                }
+            });
+        }
+
+        // 10. Schedule 1-second tick
         tickFuture = scheduledExecutor.scheduleAtFixedRate(
             this::tick, 1, 1, TimeUnit.SECONDS);
 
-        // 10. Schedule heartbeat (60 seconds)
+        // 11. Schedule heartbeat (60 seconds)
         heartbeatFuture = scheduledExecutor.scheduleAtFixedRate(
             this::heartbeat, 60, 60, TimeUnit.SECONDS);
 
@@ -222,7 +260,23 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     private static final long PERIODIC_SAVE_INTERVAL_MS = 5 * 60 * 1000L; // 5 minutes
 
     private void tick() {
-        if (!loggedIn || authController.getState() != AuthState.VALID) {
+        if (!loggedIn) {
+            return;
+        }
+
+        // Retry validation if still waiting for player name
+        if (authController.getState() == AuthState.VALIDATING) {
+            clientThread.invokeLater(() -> {
+                Player p = client.getLocalPlayer();
+                if (p != null && p.getName() != null) {
+                    authController.setPendingPlayerName(p.getName());
+                    authController.validateKey(p.getName());
+                }
+            });
+            return;
+        }
+
+        if (authController.getState() != AuthState.VALID) {
             return;
         }
 
@@ -269,7 +323,9 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
             GrandExchangeOffer[] offers = client.getGrandExchangeOffers();
             for (int i = 0; i < 8; i++) {
                 if (offers == null || offers[i] == null
-                        || offers[i].getState() == GrandExchangeOfferState.EMPTY) {
+                        || offers[i].getState() == GrandExchangeOfferState.EMPTY
+                        || offers[i].getState() == GrandExchangeOfferState.CANCELLED_BUY
+                        || offers[i].getState() == GrandExchangeOfferState.CANCELLED_SELL) {
                     geSlots[i] = new GESlotState(i, SlotStatus.EMPTY);
                     freeSlots++;
                 } else {
@@ -283,9 +339,6 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                         offer.getQuantitySold(),
                         offer.getSpent()
                     );
-                    if (offer.getState() == GrandExchangeOfferState.EMPTY) {
-                        freeSlots++;
-                    }
                 }
             }
 
@@ -301,8 +354,11 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                 .timestamp(System.currentTimeMillis())
                 .build();
 
-            // Check if state changed
-            if (offerManager.hasStateChanged(geSlots)) {
+            // Check if state changed or a forced suggest was requested
+            boolean changed = offerManager.hasStateChanged(geSlots);
+            boolean forced = forceNextSuggest;
+            if (changed || forced) {
+                forceNextSuggest = false;
                 // Update all slot states in offer manager
                 for (int i = 0; i < 8; i++) {
                     offerManager.updateSlot(i, geSlots[i]);
@@ -436,11 +492,23 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     }
 
     @Subscribe
+    public void onVarClientIntChanged(VarClientIntChanged event) {
+        if (event.getIndex() == VarClientInt.INPUT_TYPE) {
+            int inputType = client.getVarcIntValue(VarClientInt.INPUT_TYPE);
+            if (inputType == 14 && client.getWidget(162, 51) != null) {
+                // GE item search opened and search results widget exists — inject suggested item
+                clientThread.invokeLater(() -> highlightController.showSuggestedItemInSearch());
+            }
+        }
+    }
+
+    @Subscribe
     public void onWidgetLoaded(WidgetLoaded event) {
         if (event.getGroupId() == 465) {
-            // GE interface opened - request suggestion if logged in
-            if (loggedIn && lastAccountState != null && authController.getState() == AuthState.VALID) {
-                suggestionController.onStateChanged(lastAccountState);
+            // GE interface opened - force a fresh snapshot + suggest
+            if (loggedIn && authController.getState() == AuthState.VALID) {
+                forceNextSuggest = true;
+                clientThread.invokeLater(this::snapshotGameState);
             }
         }
     }
