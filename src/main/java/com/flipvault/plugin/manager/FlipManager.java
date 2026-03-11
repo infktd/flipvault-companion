@@ -1,6 +1,7 @@
 package com.flipvault.plugin.manager;
 
 import com.flipvault.plugin.model.ActiveFlip;
+import com.flipvault.plugin.model.GETax;
 import com.flipvault.plugin.model.Transaction;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,7 +41,7 @@ public class FlipManager {
             pendingBuys.remove(itemId);
         }
 
-        long profit = ((long) sellPrice - buy.getBuyPrice()) * quantity;
+        long profit = GETax.calculateProfit(buy.getBuyPrice(), sellPrice, quantity);
 
         Transaction tx = Transaction.builder()
             .itemId(itemId)
@@ -54,6 +55,18 @@ public class FlipManager {
 
         log.debug("Sell matched: item={}, profit={}", itemId, profit);
         return tx;
+    }
+
+    /**
+     * Find the buy price for a pending flip of the given item (FIFO peek).
+     * Returns -1 if no pending buy exists.
+     */
+    public synchronized int getBuyPriceForItem(int itemId) {
+        Queue<ActiveFlip> buys = pendingBuys.get(itemId);
+        if (buys == null || buys.isEmpty()) {
+            return -1;
+        }
+        return buys.peek().getBuyPrice();
     }
 
     public List<ActiveFlip> getActiveFlips() {

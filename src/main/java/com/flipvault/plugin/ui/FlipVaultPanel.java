@@ -19,6 +19,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingConstants;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -65,10 +66,15 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
     // Header elements
     private JLabel sessionProfitLabel;
     private JLabel sessionFlipsLabel;
+    private JLabel sessionTimeLabel;
     private JLabel connectionStatusLabel;
     private JLabel versionLabel;
     private JLabel logoutLabel;
     private JLabel premiumLabel;
+
+    // Live session timer
+    private Timer sessionTimer;
+    private volatile SessionStats lastStats;
 
     // Auth controller reference for conflict panel
     private final AuthController authController;
@@ -142,6 +148,15 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
 
         // Default state
         mainCardLayout.show(mainCardPanel, CARD_LOGIN);
+
+        // Live session timer — updates time label every second
+        sessionTimer = new Timer(1000, e -> {
+            SessionStats stats = lastStats;
+            if (stats != null && stats.getSessionStartTime() > 0) {
+                sessionTimeLabel.setText(stats.getTimeActive());
+            }
+        });
+        sessionTimer.start();
     }
 
     // ---- AuthStateListener implementation ----
@@ -193,9 +208,11 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
         if (stats == null) {
             return;
         }
+        lastStats = stats;
         sessionProfitLabel.setText("Session: " + stats.getFormattedProfit());
         sessionProfitLabel.setForeground(stats.getTotalProfit() >= 0 ? COLOR_BUY : COLOR_SELL);
         sessionFlipsLabel.setText("Flips: " + stats.getFlipsDone());
+        sessionTimeLabel.setText(stats.getTimeActive());
     }
 
     public void updatePlanBadge(String plan) {
@@ -227,6 +244,10 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
 
     public KeySelectionPanel getKeySelectionPanel() {
         return keySelectionPanel;
+    }
+
+    public boolean isCurrentlyActive() {
+        return isShowing();
     }
 
     // ---- Panel builders ----
@@ -280,6 +301,13 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
         sessionProfitLabel.setFont(FontManager.getRunescapeSmallFont());
         sessionProfitLabel.setForeground(COLOR_BUY);
         bar.add(sessionProfitLabel, BorderLayout.WEST);
+
+        // Center: live session time
+        sessionTimeLabel = new JLabel("0:00:00");
+        sessionTimeLabel.setFont(FontManager.getRunescapeSmallFont());
+        sessionTimeLabel.setForeground(COLOR_MUTED);
+        sessionTimeLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        bar.add(sessionTimeLabel, BorderLayout.CENTER);
 
         sessionFlipsLabel = new JLabel("Flips: 0");
         sessionFlipsLabel.setFont(FontManager.getRunescapeSmallFont());
@@ -346,35 +374,35 @@ public class FlipVaultPanel extends PluginPanel implements AuthController.AuthSt
     }
 
     private JPanel buildFooter() {
-        JPanel footer = new JPanel(new BorderLayout());
+        JPanel footer = new JPanel(new GridLayout(1, 2));
         footer.setBackground(ColorScheme.DARK_GRAY_COLOR);
         footer.setBorder(new EmptyBorder(6, 10, 6, 10));
 
         connectionStatusLabel = new JLabel("\u25CF Disconnected");
         connectionStatusLabel.setFont(FontManager.getRunescapeSmallFont());
         connectionStatusLabel.setForeground(COLOR_SELL);
-        footer.add(connectionStatusLabel, BorderLayout.WEST);
+        connectionStatusLabel.setHorizontalAlignment(SwingConstants.LEFT);
+        footer.add(connectionStatusLabel);
 
         versionLabel = new JLabel("v0.1.0");
         versionLabel.setFont(FontManager.getRunescapeSmallFont());
         versionLabel.setForeground(COLOR_MUTED);
         versionLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        footer.add(versionLabel, BorderLayout.EAST);
+        footer.add(versionLabel);
 
         return footer;
     }
 
     private JPanel buildValidatingPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(40, 10, 40, 10));
 
         JLabel label = new JLabel("<html><center>Log in to a game world<br>to get started</center></html>");
         label.setForeground(COLOR_MUTED);
         label.setFont(FontManager.getRunescapeSmallFont());
-        label.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(label);
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(label, BorderLayout.CENTER);
 
         return panel;
     }

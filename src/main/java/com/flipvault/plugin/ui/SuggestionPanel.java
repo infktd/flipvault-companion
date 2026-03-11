@@ -41,6 +41,7 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
     private JLabel itemNameLabel;
     private JLabel actionBadge;
     private JLabel priceQtyLabel;
+    private JLabel estSellLabel;
     private JLabel profitLabel;
     private JTextArea reasonArea;
 
@@ -123,6 +124,13 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
 
             priceQtyLabel.setText(formatNumber(suggestion.getPrice()) + " gp x " + formatNumber(suggestion.getQuantity()));
 
+            if (isBuy && suggestion.getEstimatedSellPrice() > 0) {
+                estSellLabel.setText("Est. sell: " + formatNumber(suggestion.getEstimatedSellPrice()) + " gp");
+                estSellLabel.setVisible(true);
+            } else {
+                estSellLabel.setVisible(false);
+            }
+
             profitLabel.setText("Est. profit: " + formatGp(suggestion.getEstimatedProfit()));
             profitLabel.setForeground(suggestion.getEstimatedProfit() >= 0 ? COLOR_BUY : COLOR_SELL);
 
@@ -159,16 +167,15 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
     // ---- Panel builders ----
 
     private JPanel buildLoadingPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(40, 10, 40, 10));
 
         JLabel label = new JLabel("Loading suggestion...");
         label.setForeground(COLOR_MUTED);
         label.setFont(FontManager.getRunescapeSmallFont());
-        label.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(label);
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(label, BorderLayout.CENTER);
 
         return panel;
     }
@@ -209,7 +216,16 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         priceQtyLabel.setFont(FontManager.getRunescapeSmallFont());
         priceQtyLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         panel.add(priceQtyLabel);
-        panel.add(Box.createVerticalStrut(6));
+        panel.add(Box.createVerticalStrut(4));
+
+        // Estimated sell price (BUY suggestions only)
+        estSellLabel = new JLabel();
+        estSellLabel.setForeground(COLOR_MUTED);
+        estSellLabel.setFont(FontManager.getRunescapeSmallFont());
+        estSellLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        estSellLabel.setVisible(false);
+        panel.add(estSellLabel);
+        panel.add(Box.createVerticalStrut(4));
 
         // Estimated profit
         profitLabel = new JLabel();
@@ -245,23 +261,21 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
     }
 
     private JPanel buildWaitPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(30, 10, 30, 10));
 
         JLabel label = new JLabel("Waiting for opportunities...");
         label.setForeground(COLOR_MUTED);
         label.setFont(FontManager.getRunescapeSmallFont());
-        label.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(label);
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(label, BorderLayout.CENTER);
 
         return panel;
     }
 
     private JPanel buildErrorPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(30, 10, 30, 10));
 
@@ -269,53 +283,50 @@ public class SuggestionPanel extends JPanel implements SuggestionController.Sugg
         errorMsg.setName("errorMessage");
         errorMsg.setForeground(COLOR_SELL);
         errorMsg.setFont(FontManager.getRunescapeSmallFont());
-        errorMsg.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(errorMsg);
+        errorMsg.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(errorMsg, BorderLayout.CENTER);
 
         return panel;
     }
 
     private JPanel buildEmptyPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(40, 10, 40, 10));
 
         JLabel label = new JLabel("<html><center>Log in and open the<br>Grand Exchange to get started</center></html>");
         label.setForeground(COLOR_MUTED);
         label.setFont(FontManager.getRunescapeSmallFont());
-        label.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(label);
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(label, BorderLayout.CENTER);
 
         return panel;
     }
 
     private JPanel buildCollectPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(30, 10, 30, 10));
 
         collectLabel = new JLabel("Collect your completed offers");
         collectLabel.setForeground(COLOR_CYAN);
         collectLabel.setFont(FontManager.getRunescapeBoldFont());
-        collectLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(collectLabel);
+        collectLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(collectLabel, BorderLayout.CENTER);
 
         return panel;
     }
 
     private JPanel buildCancelPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(30, 10, 30, 10));
 
         cancelLabel = new JLabel("Cancel offer in slot ?");
         cancelLabel.setForeground(COLOR_SELL);
         cancelLabel.setFont(FontManager.getRunescapeBoldFont());
-        cancelLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(cancelLabel);
+        cancelLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(cancelLabel, BorderLayout.CENTER);
 
         return panel;
     }

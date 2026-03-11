@@ -3,6 +3,7 @@ package com.flipvault.plugin.controller;
 import com.flipvault.plugin.manager.FlipManager;
 import com.flipvault.plugin.model.AccountState;
 import com.flipvault.plugin.model.ActiveFlip;
+import com.flipvault.plugin.model.GETax;
 import com.flipvault.plugin.model.Suggestion;
 import java.net.SocketTimeoutException;
 import java.util.List;
@@ -33,6 +34,8 @@ public class SuggestionController {
     private volatile long lastRequestTime;
     private volatile boolean requestInFlight;
     private volatile AccountState pendingState;
+    @Getter @lombok.Setter
+    private volatile boolean suggestionNeeded;
 
     private SuggestionListener listener;
 
@@ -126,6 +129,7 @@ public class SuggestionController {
             try {
                 List<ActiveFlip> activeFlips = flipManager.getActiveFlips();
                 Suggestion suggestion = apiClient.requestSuggestion(state, activeFlips, currentSuggestion);
+                enrichEstimatedProfit(suggestion);
                 currentSuggestion = suggestion;
 
                 log.debug("Suggestion received: {} {} x{} @ {}",
@@ -143,7 +147,7 @@ public class SuggestionController {
                     scheduleRetry(state, WAIT_RETRY_MS);
                 }
             } catch (ApiException e) {
-                log.warn("Suggestion request failed: {} (status={})", e.getMessage(), e.getStatusCode());
+                log.warn("Suggestion request failed: {} (status={}) body={}", e.getMessage(), e.getStatusCode(), e.getResponseBody());
                 currentSuggestion = null;
 
                 SwingUtilities.invokeLater(() -> {
@@ -158,8 +162,9 @@ public class SuggestionController {
                     // Auth expired - don't retry, let auth controller handle it
                     authController.onUnauthorized();
                 } else if (status == 400) {
-                    // Bad request (likely transient invalid state) - retry after 3s
-                    scheduleRetry(state, BAD_REQUEST_RETRY_MS);
+                    // Bad request (transient invalid state) — don't retry with stale state.
+                    // Set flag so the next game tick sends fresh state instead.
+                    suggestionNeeded = true;
                 } else if (status >= 500) {
                     // Server error - retry after 30s
                     scheduleRetry(state, SERVER_ERROR_RETRY_MS);
@@ -194,6 +199,37 @@ public class SuggestionController {
                 requestSuggestion(state);
             }
         }, delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Calculate estimatedProfit client-side if the server didn't provide it.
+     * For SELL: uses the active flip's buy price and applies GE tax.
+     * For BUY: uses estimatedSellPrice (from server) and applies GE tax.
+     */
+    private void enrichEstimatedProfit(Suggestion suggestion) {
+        if (suggestion == null || suggestion.getEstimatedProfit() != 0) {
+            return;
+        }
+
+        String action = suggestion.getAction();
+        int price = suggestion.getPrice();
+        int qty = suggestion.getQuantity();
+
+        if ("BUY".equals(action) && price > 0 && qty > 0
+                && suggestion.getEstimatedSellPrice() > 0) {
+            long profit = GETax.calculateProfit(price, suggestion.getEstimatedSellPrice(), qty);
+            suggestion.setEstimatedProfit(profit);
+            log.debug("Calculated BUY estimated profit: {} (buy={}, estSell={}, qty={})",
+                profit, price, suggestion.getEstimatedSellPrice(), qty);
+        } else if ("SELL".equals(action) && price > 0 && qty > 0) {
+            int buyPrice = flipManager.getBuyPriceForItem(suggestion.getItemId());
+            if (buyPrice > 0) {
+                long profit = GETax.calculateProfit(buyPrice, price, qty);
+                suggestion.setEstimatedProfit(profit);
+                log.debug("Calculated SELL estimated profit: {} (buy={}, sell={}, qty={})",
+                    profit, buyPrice, price, qty);
+            }
+        }
     }
 
     public void clearSuggestion() {

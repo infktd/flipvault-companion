@@ -1,5 +1,6 @@
 package com.flipvault.plugin.controller;
 
+import com.flipvault.plugin.FlipVaultConfig;
 import com.flipvault.plugin.model.Suggestion;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -17,7 +18,6 @@ import net.runelite.api.VarClientInt;
 import net.runelite.api.VarClientStr;
 import net.runelite.api.VarPlayer;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
@@ -42,6 +42,9 @@ public class HighlightController extends Overlay {
     @Inject
     private Client client;
 
+    @Inject
+    private FlipVaultConfig config;
+
     @Setter
     private Suggestion currentSuggestion;
 
@@ -58,7 +61,15 @@ public class HighlightController extends Overlay {
 
     @Override
     public Dimension render(Graphics2D graphics) {
-        if (currentSuggestion == null || !isGEOpen()) {
+        if (config == null || !config.suggestionHighlights()) {
+            return null;
+        }
+
+        if (currentSuggestion == null) {
+            return null;
+        }
+
+        if (!isGEOpen()) {
             return null;
         }
 
@@ -66,6 +77,11 @@ public class HighlightController extends Overlay {
         if (action == null) {
             return null;
         }
+
+        log.debug("Overlay render: action={}, homeScreen={}, offerSetup={}, geItem={}, varbit4439={}",
+            action, isOnHomeScreen(), isGEOfferSetupOpen(),
+            client.getVarpValue(VarPlayer.CURRENT_GE_ITEM),
+            client.getVarbitValue(4439));
 
         switch (action) {
             case "BUY":
@@ -90,74 +106,86 @@ public class HighlightController extends Overlay {
     // ---- BUY flow ----
 
     private void highlightForBuy(Graphics2D g) {
-        if (isOnHomeScreen()) {
-            highlightFirstEmptyBuyButton(g);
-        } else if (isGEOfferSetupOpen()) {
-            highlightOfferScreen(g, HIGHLIGHT_BUY);
+        int currentItem = client.getVarpValue(VarPlayer.CURRENT_GE_ITEM);
+
+        if (currentItem != -1) {
+            // Item is selected in offer setup — highlight qty/price/confirm
+            if (currentItem == currentSuggestion.getItemId()) {
+                highlightOfferButtons(g, HIGHLIGHT_BUY);
+            }
+            return;
+        }
+
+        // No item selected — either home screen or offer setup "choose item" state.
+        // Try both; widget visibility prevents drawing on the wrong screen.
+        highlightFirstEmptyBuyButton(g);
+
+        // Highlight search result if item search chatbox is open
+        int inputType = client.getVarcIntValue(VarClientInt.INPUT_TYPE);
+        if (inputType == 14) {
+            highlightSearchResult(g);
         }
     }
 
     private void highlightFirstEmptyBuyButton(Graphics2D g) {
         int firstEmpty = findFirstEmptySlot();
         if (firstEmpty < 0) {
+            log.debug("BUY highlight: no empty slot found");
             return;
         }
 
         Widget slotWidget = getGESlotWidget(firstEmpty);
         if (slotWidget == null) {
+            log.debug("BUY highlight: slot widget null for slot {}", firstEmpty);
             return;
         }
 
         Widget buyButton = slotWidget.getChild(0);
-        if (buyButton != null && !buyButton.isHidden()) {
-            highlightWidget(g, buyButton, HIGHLIGHT_BUY);
+        if (buyButton == null) {
+            log.debug("BUY highlight: buy button child(0) null for slot {}", firstEmpty);
+            return;
         }
+        if (buyButton.isHidden()) {
+            log.debug("BUY highlight: buy button hidden for slot {}", firstEmpty);
+            return;
+        }
+
+        log.debug("BUY highlight: drawing on slot {} bounds={}", firstEmpty, buyButton.getBounds());
+        highlightWidget(g, buyButton, HIGHLIGHT_BUY);
     }
 
     // ---- SELL flow ----
 
     private void highlightForSell(Graphics2D g) {
-        if (isGEOfferSetupOpen()) {
-            highlightOfferScreen(g, HIGHLIGHT_SELL);
+        int currentItem = client.getVarpValue(VarPlayer.CURRENT_GE_ITEM);
+        if (currentItem != -1 && currentItem == currentSuggestion.getItemId()) {
+            highlightOfferButtons(g, HIGHLIGHT_SELL);
         }
         // Inventory item highlighting deferred — needs inventory overlay
     }
 
-    // ---- Shared offer screen highlighting (BUY + SELL) ----
+    // ---- Shared offer button highlighting (BUY + SELL) ----
 
     /**
-     * Highlight the appropriate buttons on the GE offer setup screen based on
-     * whether the current price/quantity match the suggestion. Uses varbits
+     * Highlight qty, price, or confirm buttons on the GE offer setup screen
+     * based on whether the current values match the suggestion. Uses varbits
      * (not widget text) for reliable real-time state reading.
+     * Caller must verify the correct item is already selected.
      */
-    private void highlightOfferScreen(Graphics2D g, Color color) {
-        int currentItem = client.getVarpValue(VarPlayer.CURRENT_GE_ITEM);
-
-        if (currentItem == -1) {
-            // No item selected yet — highlight search result if search is open
-            if ("BUY".equals(currentSuggestion.getAction())) {
-                int inputType = client.getVarcIntValue(VarClientInt.INPUT_TYPE);
-                if (inputType == 14) {
-                    highlightSearchResult(g);
-                }
-            }
-            return;
-        }
-
-        if (currentItem != currentSuggestion.getItemId()) {
-            return; // Wrong item selected — don't highlight
-        }
-
+    private void highlightOfferButtons(Graphics2D g, Color color) {
         int offerPrice = client.getVarbitValue(VARBIT_OFFER_PRICE);
         int offerQty = client.getVarbitValue(VARBIT_OFFER_QUANTITY);
         boolean priceCorrect = offerPrice == currentSuggestion.getPrice();
         boolean qtyCorrect = offerQty == currentSuggestion.getQuantity();
 
+        log.debug("Offer buttons: price={}/{} qty={}/{} priceOK={} qtyOK={}",
+            offerPrice, currentSuggestion.getPrice(),
+            offerQty, currentSuggestion.getQuantity(),
+            priceCorrect, qtyCorrect);
+
         if (priceCorrect && qtyCorrect) {
-            // Both match — highlight confirm
             highlightButton(g, CHILD_CONFIRM_BUTTON, color);
         } else {
-            // Highlight whichever doesn't match
             if (!priceCorrect) {
                 highlightButton(g, CHILD_PRICE_BUTTON, color);
             }
@@ -468,7 +496,10 @@ public class HighlightController extends Overlay {
     }
 
     private boolean isOnHomeScreen() {
-        return client.getVarbitValue(4439) == 0;
+        // Check if the slot grid is visible — it's only shown on the home screen.
+        // Don't rely on varbit 4439 as its values shift with OSRS updates.
+        Widget firstSlot = getGESlotWidget(0);
+        return firstSlot != null && !firstSlot.isHidden();
     }
 
     private Widget getGESlotWidget(int slot) {
@@ -486,7 +517,8 @@ public class HighlightController extends Overlay {
     }
 
     private boolean isGEOpen() {
-        Widget geWindow = client.getWidget(WidgetInfo.GRAND_EXCHANGE_WINDOW_CONTAINER);
+        // Use direct widget ID instead of deprecated WidgetInfo enum
+        Widget geWindow = client.getWidget(465, 0);
         return geWindow != null && !geWindow.isHidden();
     }
 

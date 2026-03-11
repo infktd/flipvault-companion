@@ -302,6 +302,8 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
     // ---- Periodic tick (30s, scheduled executor) — saves + auth retry ----
 
     private static final long PERIODIC_SAVE_INTERVAL_MS = 5 * 60 * 1000L; // 5 minutes
+    private static final long SUGGESTION_REFRESH_INTERVAL_MS = 5 * 60 * 1000L; // 5 minutes
+    private long lastSuggestionRefreshTime;
 
     private void periodicTick() {
         if (!loggedIn) {
@@ -324,8 +326,19 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
             return;
         }
 
-        // Periodic save every 5 minutes
         long now = System.currentTimeMillis();
+
+        // Periodic suggestion refresh every 5 minutes (picks up fresh ML predictions)
+        if (now - lastSuggestionRefreshTime >= SUGGESTION_REFRESH_INTERVAL_MS) {
+            lastSuggestionRefreshTime = now;
+            if (lastAccountState != null) {
+                log.debug("Periodic suggestion refresh");
+                clientThread.invokeLater(this::snapshotGameState);
+                forceNextSuggest = true;
+            }
+        }
+
+        // Periodic save every 5 minutes
         if (now - lastPeriodicSaveTime >= PERIODIC_SAVE_INTERVAL_MS) {
             lastPeriodicSaveTime = now;
             if (lastAccountState != null && lastAccountState.getPlayerName() != null) {
@@ -415,10 +428,20 @@ public class FlipVaultPlugin extends Plugin implements KeyListener {
                 }
                 suggestionController.onStateChanged(newState);
 
+                // Resolve item names for active GE slots (on client thread)
+                final java.util.Map<Integer, String> itemNameMap = new java.util.HashMap<>();
+                for (GESlotState slot : geSlots) {
+                    if (slot.getStatus() != SlotStatus.EMPTY && slot.getStatus() != SlotStatus.CANCELLED
+                            && slot.getItemId() > 0 && !itemNameMap.containsKey(slot.getItemId())) {
+                        itemNameMap.put(slot.getItemId(), client.getItemDefinition(slot.getItemId()).getName());
+                    }
+                }
+                final GESlotState[] slotsCopy = geSlots.clone();
+
                 // Update UI
                 SwingUtilities.invokeLater(() -> {
                     panel.updateSessionStats(sessionManager.getStats());
-                    panel.getActiveFlipsPanel().update(flipManager.getActiveFlips());
+                    panel.getActiveFlipsPanel().update(slotsCopy, itemNameMap);
                     panel.getStatsPanel().update(sessionManager.getStats());
                 });
             }

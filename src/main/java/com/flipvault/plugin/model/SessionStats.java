@@ -33,6 +33,7 @@ public class SessionStats {
         long elapsed = System.currentTimeMillis() - sessionStartTime;
         long hours = elapsed / 3_600_000;
         long minutes = (elapsed % 3_600_000) / 60_000;
-        return String.format("%dh %02dm", hours, minutes);
+        long seconds = (elapsed % 60_000) / 1_000;
+        return String.format("%d:%02d:%02d", hours, minutes, seconds);
     }
 }
