@@ -9,7 +9,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.CopilotLoginRS;
+import com.flippingcopilot.rs.FVLoginRS;
 import com.flippingcopilot.ui.LoginPanel;
 import com.flippingcopilot.ui.MainPanel;
 import lombok.Setter;
@@ -20,7 +20,7 @@ import javax.inject.Singleton;
 
 @Slf4j
 @Singleton
-public class CopilotLoginController {
+public class FVLoginController {
 
     // dependencies
     @Setter
@@ -35,11 +35,11 @@ public class CopilotLoginController {
     private final SessionManager sessionManager;
     private final TransactionManager transactionManager;
     private final ScheduledExecutorService executorService;
-    private final CopilotLoginRS copilotLoginRS;
+    private final FVLoginRS fvLoginRS;
 
 
     @Inject
-    public CopilotLoginController(ApiRequestHandler apiRequestHandler,
+    public FVLoginController(ApiRequestHandler apiRequestHandler,
                                   FlipManager flipManager,
                                   HighlightController highlightController,
                                   SuggestionManager suggestionManager,
@@ -47,7 +47,7 @@ public class CopilotLoginController {
                                   SessionManager sessionManager,
                                   TransactionManager transactionManager,
                                   ScheduledExecutorService executorService,
-                                  CopilotLoginRS copilotLoginRS) {
+                                  FVLoginRS fvLoginRS) {
         this.apiRequestHandler = apiRequestHandler;
         this.flipManager = flipManager;
         this.highlightController = highlightController;
@@ -56,10 +56,10 @@ public class CopilotLoginController {
         this.sessionManager = sessionManager;
         this.transactionManager = transactionManager;
         this.executorService = executorService;
-        this.copilotLoginRS = copilotLoginRS;
-        flipManager.setCopilotUserId(copilotLoginRS.get().getUserId());
-        loadCopilotAccounts(0);
-        copilotLoginRS.registerListener((s) -> {
+        this.fvLoginRS = fvLoginRS;
+        flipManager.setFvUserId(fvLoginRS.get().getUserId());
+        loadFVAccounts(0);
+        fvLoginRS.registerListener((s) -> {
             if(s.loginResponse == null) {
                 flipManager.reset();
                 suggestionManager.reset();
@@ -69,22 +69,22 @@ public class CopilotLoginController {
         });
     }
 
-    private void loadCopilotAccounts(int previousFailures) {
-        int userId = copilotLoginRS.get().getUserId();
+    private void loadFVAccounts(int previousFailures) {
+        int userId = fvLoginRS.get().getUserId();
         if(userId == -1) {
             return;
         }
         long s = System.nanoTime();
         Consumer<Map<String, Integer>> onSuccess = (displayNameToAccountId) -> {
-            displayNameToAccountId.forEach((key, value) -> copilotLoginRS.addAccountIfMissing(value, key, userId));
-            log.info("loading {} copilot accounts succeeded - took {}ms", displayNameToAccountId.size(), (System.nanoTime() - s) / 1000_000);
-            syncFlips(copilotLoginRS.get().getUserId(), new HashMap<>(), 0);
+            displayNameToAccountId.forEach((key, value) -> fvLoginRS.addAccountIfMissing(value, key, userId));
+            log.info("loading {} FV accounts succeeded - took {}ms", displayNameToAccountId.size(), (System.nanoTime() - s) / 1000_000);
+            syncFlips(fvLoginRS.get().getUserId(), new HashMap<>(), 0);
         };
         Consumer<String> onFailure = (errorMessage) -> {
-            if (copilotLoginRS.get().isLoggedIn()) {
+            if (fvLoginRS.get().isLoggedIn()) {
                 long backOffSeconds = Math.min(15, (long) Math.exp(previousFailures));
-                log.info("failed to load copilot accounts ({}) retrying in {}s", errorMessage, backOffSeconds);
-                executorService.schedule(() -> loadCopilotAccounts(previousFailures + 1), backOffSeconds, TimeUnit.SECONDS);
+                log.info("failed to load FV accounts ({}) retrying in {}s", errorMessage, backOffSeconds);
+                executorService.schedule(() -> loadFVAccounts(previousFailures + 1), backOffSeconds, TimeUnit.SECONDS);
             }
         };
         apiRequestHandler.asyncLoadAccounts(onSuccess, onFailure);
@@ -92,11 +92,11 @@ public class CopilotLoginController {
 
     private void syncFlips(int userId, Map<Integer, Integer> accountIdTime, int previousFailures) {
         // Continuously sync's the delta of new or updated flips from the server with back off on failure
-        if(copilotLoginRS.get().getUserId() != userId) {
+        if(fvLoginRS.get().getUserId() != userId) {
             log.info("user={}, no longer logged in, stopping syncFlips.", userId);
             return;
         }
-        Set<Integer> accountIds = copilotLoginRS.get().accountIds();
+        Set<Integer> accountIds = fvLoginRS.get().accountIds();
         if(accountIds.isEmpty()) {
             long backOffSeconds = Math.min(45, (long) 1+previousFailures);
             log.info("user={}, no accounts loaded - re-scheduling runSyncFlips in {}s", userId, backOffSeconds);
@@ -105,7 +105,7 @@ public class CopilotLoginController {
         }
         accountIds.forEach(a -> accountIdTime.computeIfAbsent(a, i -> 0));
         long s = System.nanoTime();
-        BiConsumer<Integer, FlipsDeltaResult> onSuccess = (Integer copilotUserId, FlipsDeltaResult r) -> {
+        BiConsumer<Integer, FlipsDeltaResult> onSuccess = (Integer fvUserId, FlipsDeltaResult r) -> {
             if(!flipManager.mergeFlips(r.flips, userId)) {
                 log.info("user={}, no longer logged in, stopping syncFlips.", userId);
                 return;
@@ -139,7 +139,7 @@ public class CopilotLoginController {
     }
 
     public void onLoginResponse(LoginResponse loginResponse) {
-        copilotLoginRS.update((s) -> {
+        fvLoginRS.update((s) -> {
             s.loginResponse = loginResponse;
             return s;
         });
@@ -150,12 +150,12 @@ public class CopilotLoginController {
             flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
             transactionManager.scheduleSyncIn(0, displayName);
         }
-        flipManager.setCopilotUserId(loginResponse.getUserId());
-        loadCopilotAccounts(0);
+        flipManager.setFvUserId(loginResponse.getUserId());
+        loadFVAccounts(0);
     }
 
     public void onLoginFailure(String errorMessage) {
-        copilotLoginRS.set(new CopilotLoginState());
+        fvLoginRS.set(new FVLoginState());
         loginPanel.showLoginErrorMessage(errorMessage);
     }
 }

@@ -1,6 +1,6 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.model.PremiumInstanceStatus;
 import com.flippingcopilot.model.SuggestionManager;
 import com.flippingcopilot.ui.PremiumInstancePanel;
@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 public class PremiumInstanceController {
 
     private final ApiRequestHandler apiRequestHandler;
-    private final FlippingCopilotConfig copilotConfig;
+    private final FlipVaultConfig fvConfig;
     private final SuggestionManager suggestionManager;
     private JDialog dialog;
 
@@ -34,7 +34,7 @@ public class PremiumInstanceController {
         dialog.setLocationRelativeTo(null);
 
         // Create the panel
-        PremiumInstancePanel panel = new PremiumInstancePanel(copilotConfig, apiRequestHandler, suggestionManager);
+        PremiumInstancePanel panel = new PremiumInstancePanel(fvConfig, apiRequestHandler, suggestionManager);
         dialog.setContentPane(panel);
 
         // Show loading state

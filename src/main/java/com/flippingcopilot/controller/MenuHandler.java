@@ -1,6 +1,6 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.model.OfferManager;
 import com.flippingcopilot.model.Suggestion;
 import com.flippingcopilot.model.SuggestionManager;
@@ -22,7 +22,7 @@ import javax.inject.Singleton;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class MenuHandler {
 
-    private final FlippingCopilotConfig config;
+    private final FlipVaultConfig config;
     private final Client client;
     private final OfferManager offerManager;
     private final GrandExchange grandExchange;
@@ -30,7 +30,7 @@ public class MenuHandler {
     private final FlipsDialogController flipsDialogController;
 
 
-    public void injectCopilotPriceGraphMenuEntry(MenuEntryAdded event) {
+    public void injectFVPriceGraphMenuEntry(MenuEntryAdded event) {
         if(!config.priceGraphMenuOptionEnabled()) {
             return;
         }

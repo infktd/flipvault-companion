@@ -1,11 +1,11 @@
 package com.flippingcopilot.ui.flipsdialog;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.manager.PriceGraphConfigManager;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.CopilotLoginRS;
+import com.flippingcopilot.rs.FVLoginRS;
 import com.flippingcopilot.rs.OsrsLoginRS;
 import com.flippingcopilot.ui.graph.model.PriceLine;
 import com.google.inject.name.Named;
@@ -27,8 +27,8 @@ public class FlipsDialogController {
     private final FlipManager flipsManager;
     private final ExecutorService executorService;
     private final SessionManager sessionManager;
-    private final CopilotLoginRS copilotLoginRS;
-    private final FlippingCopilotConfig config;
+    private final FVLoginRS fvLoginRS;
+    private final FlipVaultConfig config;
     private final ApiRequestHandler apiRequestHandler;
     private final PriceGraphConfigManager priceGraphConfigManager;
     private final OsrsLoginManager osrsLoginManager;
@@ -46,15 +46,15 @@ public class FlipsDialogController {
             ItemController itemController,
             FlipManager flipsManager,
             SessionManager sessionManager,
-            CopilotLoginRS copilotLoginRS,
-            FlippingCopilotConfig config,
+            FVLoginRS fvLoginRS,
+            FlipVaultConfig config,
             ApiRequestHandler apiRequestHandler,
             PriceGraphConfigManager priceGraphConfigManager, OsrsLoginManager osrsLoginManager, SuggestionManager suggestionManager, OsrsLoginRS osrsLoginRS) {
         this.itemController = itemController;
         this.flipsManager = flipsManager;
         this.executorService = executorService;
         this.sessionManager = sessionManager;
-        this.copilotLoginRS = copilotLoginRS;
+        this.fvLoginRS = fvLoginRS;
         this.config = config;
         this.apiRequestHandler = apiRequestHandler;
         this.priceGraphConfigManager = priceGraphConfigManager;
@@ -74,18 +74,18 @@ public class FlipsDialogController {
                     config,
                     apiRequestHandler
             );
-            flipsPanel = new FlipsPanel(osrsLoginRS, flipsManager, itemController, copilotLoginRS,
+            flipsPanel = new FlipsPanel(osrsLoginRS, flipsManager, itemController, fvLoginRS,
                     executorService, config, apiRequestHandler, (f) -> {
                 visualizeFlipPanel.showFlipVisualization(f);
                 tabbedPane.setSelectedIndex(6);
             });
             ItemAggregatePanel itemsPanel = new ItemAggregatePanel(flipsManager, itemController,
-                    copilotLoginRS, executorService, config);
-            AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(flipsManager, copilotLoginRS,
+                    fvLoginRS, executorService, config);
+            AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(flipsManager, fvLoginRS,
                     executorService, config, apiRequestHandler, flipsManager);
             ProfitPanel profitPanel = new ProfitPanel(flipsManager, executorService, sessionManager,
-                    copilotLoginRS, config);
-            TransactionsPanel transactionsPanel = new TransactionsPanel(copilotLoginRS, itemController,
+                    fvLoginRS, config);
+            TransactionsPanel transactionsPanel = new TransactionsPanel(fvLoginRS, itemController,
                     executorService, apiRequestHandler, config, flipsManager);
             priceGraphPanel = new PriceGraphPanel(
                     itemController,

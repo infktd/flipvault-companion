@@ -1,6 +1,6 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.model.DiscordWebhookBody;
 import com.flippingcopilot.model.SessionData;
 import com.flippingcopilot.model.Stats;
@@ -23,7 +23,7 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class WebHookController {
 
-    private final FlippingCopilotConfig config;
+    private final FlipVaultConfig config;
     private final OkHttpClient okHttpClient;
 
     private void sendWebHook(DiscordWebhookBody discordWebhookBody) {

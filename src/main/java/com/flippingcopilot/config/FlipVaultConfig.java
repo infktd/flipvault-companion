@@ -15,11 +15,11 @@ import java.nio.charset.StandardCharsets;
 
 
 @ConfigGroup("flipvault")
-public interface FlippingCopilotConfig extends Config
+public interface FlipVaultConfig extends Config
 {
     public enum PriceGraphWebsite
     {
-        FLIPPING_COPILOT("FlipVault"),
+        FLIPVAULT("FlipVault"),
         OSRS_WIKI("OSRS Wiki"),
         GE_TRACKER("GE Tracker"),
         PLATINUM_TOKENS("PlatinumTokens"),
@@ -155,7 +155,7 @@ public interface FlippingCopilotConfig extends Config
     )
     default PriceGraphWebsite priceGraphWebsite()
     {
-        return PriceGraphWebsite.FLIPPING_COPILOT;
+        return PriceGraphWebsite.FLIPVAULT;
     }
 
     @ConfigItem(

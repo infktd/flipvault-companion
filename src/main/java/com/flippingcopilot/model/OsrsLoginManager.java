@@ -18,7 +18,7 @@ public class OsrsLoginManager {
     public static final int GE_LOGIN_BURST_WINDOW = 2; // ticks
 
     public static String LOGIN_TO_GET_SUGGESTION_MESSAGE = "Log in to the game<br>to get a flip suggestion";
-    private static final WorldType[] COPILOT_UNSUPPORTED_WORLDS = {WorldType.BETA_WORLD,
+    private static final WorldType[] FV_UNSUPPORTED_WORLDS = {WorldType.BETA_WORLD,
             WorldType.DEADMAN,
             WorldType.FRESH_START_WORLD,
             WorldType.NOSAVE_MODE,
@@ -102,7 +102,7 @@ public class OsrsLoginManager {
 
     public WorldType getUnsupportedWorldType() {
         EnumSet<WorldType> worldTypes = client.getWorldType();
-        for (WorldType worldType : COPILOT_UNSUPPORTED_WORLDS) {
+        for (WorldType worldType : FV_UNSUPPORTED_WORLDS) {
             if (worldTypes.contains(worldType)) {
                 return worldType;
             }

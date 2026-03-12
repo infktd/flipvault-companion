@@ -30,7 +30,7 @@ public class SuggestionPreferencesManager {
     private static final int DEFAULT_TIMEFRAME = 5;
     private static final int DEFAULT_DUMP_MIN_PROFIT = 100_000;
 
-    public static final Path DEFAULT_PROFILE_PATH = Paths.get(Persistance.COPILOT_DIR.getPath(), "Default profile.profile.json");
+    public static final Path DEFAULT_PROFILE_PATH = Paths.get(Persistance.FV_DIR.getPath(), "Default profile.profile.json");
     public static final String PROFILE_SUFFIX = ".profile.json";
 
     // dependencies
@@ -201,7 +201,7 @@ public class SuggestionPreferencesManager {
     }
 
     public synchronized void addProfile(String name) throws IOException {
-        Path p = Paths.get(Persistance.COPILOT_DIR.toString(), name + PROFILE_SUFFIX);
+        Path p = Paths.get(Persistance.FV_DIR.toString(), name + PROFILE_SUFFIX);
         createProfileFile(p);
         availableProfiles.add(p);
         selectedProfile = p;
@@ -247,7 +247,7 @@ public class SuggestionPreferencesManager {
     }
 
     private synchronized void loadAvailableProfiles() {
-        try (Stream<Path> paths = Files.list(Persistance.COPILOT_DIR.toPath())) {
+        try (Stream<Path> paths = Files.list(Persistance.FV_DIR.toPath())) {
             availableProfiles = paths
                     .filter(p -> p.toString().endsWith(PROFILE_SUFFIX))
                     .collect(Collectors.toList());
@@ -263,7 +263,7 @@ public class SuggestionPreferencesManager {
     }
 
     private Path fromDisplayName(String name) {
-        return Paths.get(Persistance.COPILOT_DIR.toString(), name + PROFILE_SUFFIX);
+        return Paths.get(Persistance.FV_DIR.toString(), name + PROFILE_SUFFIX);
     }
 
     public synchronized void deleteSelectedProfile() throws IOException {

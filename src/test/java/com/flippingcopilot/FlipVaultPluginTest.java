@@ -1,14 +1,14 @@
 package com.flippingcopilot;
 
-import com.flippingcopilot.controller.FlippingCopilotPlugin;
+import com.flippingcopilot.controller.FlipVaultPlugin;
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class FlippingCopilotPluginTest
+public class FlipVaultPluginTest
 {
 	public static void main(String[] args) throws Exception
 	{
-		ExternalPluginManager.loadBuiltin(FlippingCopilotPlugin.class);
+		ExternalPluginManager.loadBuiltin(FlipVaultPlugin.class);
 		RuneLite.main(args);
 	}
 }

@@ -1,7 +1,7 @@
 package com.flippingcopilot.ui.flipsdialog;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.manager.PriceGraphConfigManager;
 import com.flippingcopilot.model.FlipV2;
@@ -35,7 +35,7 @@ public class VisualizeFlipPanel extends JPanel {
 
     public VisualizeFlipPanel(ItemController itemController,
                               PriceGraphConfigManager configManager,
-                              FlippingCopilotConfig copilotConfig,
+                              FlipVaultConfig fvConfig,
                               ApiRequestHandler apiRequestHandler) {
         this.itemController = itemController;
         this.apiRequestHandler = apiRequestHandler;
@@ -45,7 +45,7 @@ public class VisualizeFlipPanel extends JPanel {
 
 
         graphPanel = new GraphPanel(configManager);
-        statsPanel = new FlipStatsPanel(configManager, copilotConfig);
+        statsPanel = new FlipStatsPanel(configManager, fvConfig);
         statsPanel.setBackground(configManager.getConfig().backgroundColor);
         statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -77,7 +77,7 @@ public class VisualizeFlipPanel extends JPanel {
         Consumer<String> onFailure = (String errorMessage) -> {
             SwingUtilities.invokeLater(() -> showErrorCard(errorMessage));
         };
-        apiRequestHandler.asyncGetVisualizeFlipData(flip.getId(), "FlipCopilot", onSuccess, onFailure);
+        apiRequestHandler.asyncGetVisualizeFlipData(flip.getId(), "FlipVault", onSuccess, onFailure);
     }
 
     private JPanel buildLandingCard() {

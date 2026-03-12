@@ -1,9 +1,9 @@
 package com.flippingcopilot.ui.flipsdialog;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.CopilotLoginRS;
+import com.flippingcopilot.rs.FVLoginRS;
 import com.flippingcopilot.ui.Paginator;
 import com.flippingcopilot.ui.Spinner;
 import com.flippingcopilot.ui.components.AccountDropdown;
@@ -32,7 +32,7 @@ public class ItemAggregatePanel extends JPanel {
     private static final NumberFormat GP_FORMAT = NumberFormat.getNumberInstance(Locale.US);
 
     // dependencies
-    private final CopilotLoginRS copilotLoginRS;
+    private final FVLoginRS fvLoginRS;
 
     // ui components
     private final DefaultTableModel tableModel;
@@ -55,10 +55,10 @@ public class ItemAggregatePanel extends JPanel {
 
     public ItemAggregatePanel(FlipManager flipsManager,
                               ItemController itemController,
-                              CopilotLoginRS copilotLoginRS,
+                              FVLoginRS fvLoginRS,
                               @Named("copilotExecutor") ExecutorService executorService,
-                              FlippingCopilotConfig config) {
-        this.copilotLoginRS = copilotLoginRS;
+                              FlipVaultConfig config) {
+        this.fvLoginRS = fvLoginRS;
         setFocusable(true);
 
         paginatorPanel = new Paginator((i) -> sortAndFilter.setPage(i));
@@ -249,7 +249,7 @@ public class ItemAggregatePanel extends JPanel {
 
     private void setupDropdowns() {
         accountDropdown = new AccountDropdown(
-                () -> copilotLoginRS.get().displayNameToAccountId,
+                () -> fvLoginRS.get().displayNameToAccountId,
                 sortAndFilter::setAccountId,
                 AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION
         );

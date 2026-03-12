@@ -1,7 +1,7 @@
 package com.flippingcopilot.rs;
 
 import com.flippingcopilot.controller.Persistance;
-import com.flippingcopilot.model.CopilotLoginState;
+import com.flippingcopilot.model.FVLoginState;
 import com.flippingcopilot.model.LoginResponse;
 import com.flippingcopilot.model.OsrsLoginState;
 import com.google.gson.Gson;
@@ -21,20 +21,20 @@ import java.util.concurrent.ExecutorService;
 
 @Singleton
 @Slf4j
-public class CopilotLoginRS extends ReactiveStateImpl<CopilotLoginState> {
+public class FVLoginRS extends ReactiveStateImpl<FVLoginState> {
 
     public static final String LOGIN_RESPONSE_JSON_FILE = "login-response.json";
-    private final File file = new File(Persistance.COPILOT_DIR, LOGIN_RESPONSE_JSON_FILE);
+    private final File file = new File(Persistance.FV_DIR, LOGIN_RESPONSE_JSON_FILE);
 
     private final Gson gson;
     private final ExecutorService executorService;
 
     @Inject
-    public CopilotLoginRS(Gson gson, ExecutorService executorService) {
-        super(new CopilotLoginState());
+    public FVLoginRS(Gson gson, ExecutorService executorService) {
+        super(new FVLoginState());
         this.gson = gson;
         this.executorService = executorService;
-        registerListener((s) -> log.debug("CopilotLoginRS to {}", s));
+        registerListener((s) -> log.debug("FVLoginRS to {}", s));
         update(s -> {
             s.loginResponse = loadLoginResponse();
             return s;
@@ -74,13 +74,13 @@ public class CopilotLoginRS extends ReactiveStateImpl<CopilotLoginState> {
         if (file.exists() && !file.delete()) {
             log.warn("failed to delete login response file {}", file);
         }
-        set(new CopilotLoginState());
+        set(new FVLoginState());
     }
 
 
     public void removeAccount(Integer accountId) {
         update((s) -> {
-            CopilotLoginState updated = s.copy();
+            FVLoginState updated = s.copy();
             String displayName = updated.accountIdToDisplayName.get(accountId);
             updated.accountIdToDisplayName.remove(accountId);
             if(displayName != null){
@@ -90,10 +90,10 @@ public class CopilotLoginRS extends ReactiveStateImpl<CopilotLoginState> {
         });
     }
 
-    public void addAccountIfMissing(Integer accountId, String displayName, int copilotUserId) {
+    public void addAccountIfMissing(Integer accountId, String displayName, int fvUserId) {
         update((s) -> {
-            if (!s.accountIdToDisplayName.containsKey(accountId) && s.getUserId() == copilotUserId) {
-                CopilotLoginState updated = s.copy();
+            if (!s.accountIdToDisplayName.containsKey(accountId) && s.getUserId() == fvUserId) {
+                FVLoginState updated = s.copy();
                 updated.displayNameToAccountId.put(displayName, accountId);
                 updated.accountIdToDisplayName.put(accountId, displayName);
                 return updated;

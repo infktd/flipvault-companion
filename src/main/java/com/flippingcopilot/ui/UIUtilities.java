@@ -1,6 +1,6 @@
 package com.flippingcopilot.ui;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.QuantityFormatter;
 
@@ -59,7 +59,7 @@ public class UIUtilities {
                 + new String[] {"", "K", "M", "B", "T"}[(int) (power / 3)];
     }
 
-    public static Color getProfitColor(long profit, FlippingCopilotConfig config) {
+    public static Color getProfitColor(long profit, FlipVaultConfig config) {
         if (profit > 0) {
             return config.profitAmountColor();
         } else if (profit < 0) {

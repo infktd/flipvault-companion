@@ -1,6 +1,6 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.model.SuggestionManager;
 import net.runelite.api.Client;
 import net.runelite.api.VarClientInt;
@@ -18,7 +18,7 @@ import java.awt.event.KeyEvent;
 public class KeybindHandler {
 
     private final KeyManager keyManager;
-    private final FlippingCopilotConfig config;
+    private final FlipVaultConfig config;
     private final ClientThread clientThread;
     private final SuggestionManager suggestionManager;
     private final Client client;
@@ -27,7 +27,7 @@ public class KeybindHandler {
 
 
     @Inject
-    public KeybindHandler(KeyManager keyManager, FlippingCopilotConfig config, ClientThread clientThread, SuggestionManager suggestionManager, Client client, GrandExchange grandExchange, OfferHandler offerHandler) {
+    public KeybindHandler(KeyManager keyManager, FlipVaultConfig config, ClientThread clientThread, SuggestionManager suggestionManager, Client client, GrandExchange grandExchange, OfferHandler offerHandler) {
         this.keyManager = keyManager;
         this.config = config;
         this.clientThread = clientThread;

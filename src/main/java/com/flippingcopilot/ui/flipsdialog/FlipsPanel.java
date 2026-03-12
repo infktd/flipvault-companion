@@ -1,10 +1,10 @@
 package com.flippingcopilot.ui.flipsdialog;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.CopilotLoginRS;
+import com.flippingcopilot.rs.FVLoginRS;
 import com.flippingcopilot.rs.OsrsLoginRS;
 import com.flippingcopilot.ui.Paginator;
 import com.flippingcopilot.ui.Spinner;
@@ -48,7 +48,7 @@ public class FlipsPanel extends JPanel {
 
     // dependencies
     private final FlipManager flipsManager;
-    private final CopilotLoginRS copilotLoginRS;
+    private final FVLoginRS fvLoginRS;
     private final ApiRequestHandler apiRequestHandler;
     private final OsrsLoginRS osrsLoginRS;
 
@@ -73,19 +73,19 @@ public class FlipsPanel extends JPanel {
 
     public FlipsPanel(OsrsLoginRS osrsLoginRS, FlipManager flipsManager,
                       ItemController itemController,
-                      CopilotLoginRS copilotLoginRS,
+                      FVLoginRS fvLoginRS,
                       @Named("copilotExecutor") ExecutorService executorService,
-                      FlippingCopilotConfig config,
+                      FlipVaultConfig config,
                       ApiRequestHandler apiRequestHandler,
                       Consumer<FlipV2> onVisualizeFlip) {
         this.osrsLoginRS = osrsLoginRS;
         this.onVisualizeFlip = onVisualizeFlip;
-        this.copilotLoginRS = copilotLoginRS;
+        this.fvLoginRS = fvLoginRS;
         this.apiRequestHandler = apiRequestHandler;
 
         // Initialize pagination first (before loadFlips is called)
         paginatorPanel = new Paginator((i) -> sortAndFilter.setPage(i));
-        sortAndFilter = new FlipFilterAndSort(flipsManager, this::showFlips, paginatorPanel::setTotalPages, this::setSpinnerVisible, executorService, copilotLoginRS, itemController);
+        sortAndFilter = new FlipFilterAndSort(flipsManager, this::showFlips, paginatorPanel::setTotalPages, this::setSpinnerVisible, executorService, fvLoginRS, itemController);
         this.flipsManager = flipsManager;
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -250,7 +250,7 @@ public class FlipsPanel extends JPanel {
         table.getColumnModel().getColumn(6).setCellRenderer(centerRenderer); // Sold
 
         accountDropdown = new AccountDropdown(
-                () -> copilotLoginRS.get().displayNameToAccountId,
+                () -> fvLoginRS.get().displayNameToAccountId,
                 sortAndFilter::setAccountId,
                 AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION
         );
@@ -349,7 +349,7 @@ public class FlipsPanel extends JPanel {
                 setSpinnerVisible(true);
                 log.info("deleting flip with ID: {}", flip.getId());
                 Consumer<FlipV2> onSuccess = (f) -> {
-                    flipsManager.mergeFlips(Collections.singletonList(f),copilotLoginRS.get().getUserId());
+                    flipsManager.mergeFlips(Collections.singletonList(f),fvLoginRS.get().getUserId());
                     setSpinnerVisible(false);
                     sortAndFilter.reloadFlips(true, true);
                 };
@@ -358,7 +358,7 @@ public class FlipsPanel extends JPanel {
         });
         menu.add(deleteItem);
 
-        String flipOsrsDisplayName = copilotLoginRS.get().getDisplayName(flip.getAccountId());
+        String flipOsrsDisplayName = fvLoginRS.get().getDisplayName(flip.getAccountId());
         if (shouldShowAddMissedSellOption(flipOsrsDisplayName, flip)) {
             JMenuItem missedSellTransaction = new JMenuItem("Add missed sell transaction");
             missedSellTransaction.addActionListener(evt -> {
@@ -412,8 +412,8 @@ public class FlipsPanel extends JPanel {
                         t.setBoxId(0);
                         t.setAmountSpent(price * qty);
                         t.setTimestamp(Instant.now());
-                        t.setCopilotPriceUsed(true);
-                        t.setWasCopilotSuggestion(true);
+                        t.setFvPriceUsed(true);
+                        t.setWasFvSuggestion(true);
                         t.setOfferTotalQuantity(qty);
 
                         Long profit = flipsManager.estimateTransactionProfit(flip.getAccountId(), t);
@@ -495,7 +495,7 @@ public class FlipsPanel extends JPanel {
         SwingUtilities.invokeLater(() -> {
             currentFlips = flips;
             tableModel.setRowCount(0);
-            Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
+            Map<Integer, String> accountIdToDisplayName = fvLoginRS.get().accountIdToDisplayName;
             for (FlipV2 flip : flips) {
                 long profitPerItem = flip.getClosedQuantity() > 0 ? flip.getProfit() / flip.getClosedQuantity() : 0L;
 

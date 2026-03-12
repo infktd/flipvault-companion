@@ -69,8 +69,8 @@ public class GrandExchangeOfferEventHandler {
             return;
         }
 
-        o.setCopilotPriceUsed(wasCopilotPriceUsed(o, prev));
-        o.setWasCopilotSuggestion(wasCopilotSuggestion(o, prev));
+        o.setFvPriceUsed(wasFvPriceUsed(o, prev));
+        o.setWasFvSuggestion(wasFvSuggestion(o, prev));
 
         boolean consistent = isConsistent(prev, o);
         if(!consistent) {
@@ -90,19 +90,19 @@ public class GrandExchangeOfferEventHandler {
         suggestionManager.setSuggestionNeeded(true);
     }
 
-    private boolean wasCopilotPriceUsed(SavedOffer o, SavedOffer prev) {
+    private boolean wasFvPriceUsed(SavedOffer o, SavedOffer prev) {
         if(isNewOffer(prev, o)){
             return o.getItemId() == offerManager.getLastViewedSlotItemId() && o.getPrice() == offerManager.getLastViewedSlotItemPrice() && Instant.now().minusSeconds(30).getEpochSecond() < offerManager.getLastViewedSlotPriceTime();
         } else {
-            return prev.isCopilotPriceUsed();
+            return prev.isFvPriceUsed();
         }
     }
 
-    private boolean wasCopilotSuggestion(SavedOffer o, SavedOffer prev) {
+    private boolean wasFvSuggestion(SavedOffer o, SavedOffer prev) {
         if(isNewOffer(prev, o)){
             return o.getItemId() == suggestionManager.getSuggestionItemIdOnOfferSubmitted() && o.getOfferStatus().equals(suggestionManager.getSuggestionOfferStatusOnOfferSubmitted());
         } else {
-            return prev.isWasCopilotSuggestion();
+            return prev.isWasFvSuggestion();
         }
     }
 
@@ -169,8 +169,8 @@ public class GrandExchangeOfferEventHandler {
             t.setBoxId(slot);
             t.setAmountSpent(amountSpentDiff);
             t.setTimestamp(Instant.now());
-            t.setCopilotPriceUsed(offer.isCopilotPriceUsed());
-            t.setWasCopilotSuggestion(offer.isWasCopilotSuggestion());
+            t.setFvPriceUsed(offer.isFvPriceUsed());
+            t.setWasFvSuggestion(offer.isWasFvSuggestion());
             t.setOfferTotalQuantity(offer.getTotalQuantity());
             t.setLogin(login);
             t.setConsistent(consistent);

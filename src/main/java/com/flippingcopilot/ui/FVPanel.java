@@ -6,14 +6,14 @@ import javax.swing.*;
 import java.awt.*;
 
 @Singleton
-public class CopilotPanel extends JPanel {
+public class FVPanel extends JPanel {
 
     public final SuggestionPanel suggestionPanel;
     public final StatsPanelV2 statsPanel;
     public final ControlPanel controlPanel;
 
     @Inject
-    public CopilotPanel(SuggestionPanel suggestionPanel,
+    public FVPanel(SuggestionPanel suggestionPanel,
                         StatsPanelV2 statsPanel,
                         ControlPanel controlPanel) {
         this.statsPanel = statsPanel;

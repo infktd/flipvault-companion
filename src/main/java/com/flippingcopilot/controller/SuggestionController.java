@@ -1,8 +1,8 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.CopilotLoginRS;
+import com.flippingcopilot.rs.FVLoginRS;
 import com.flippingcopilot.ui.*;
 import com.flippingcopilot.ui.flipsdialog.FlipsDialogController;
 import com.flippingcopilot.ui.graph.model.Data;
@@ -45,9 +45,9 @@ public class SuggestionController {
     private final ApiRequestHandler apiRequestHandler;
     private final Notifier notifier;
     private final OfferManager offerManager;
-    private final CopilotLoginRS copilotLoginRS;
+    private final FVLoginRS fvLoginRS;
     private final ClientThread clientThread;
-    private final FlippingCopilotConfig config;
+    private final FlipVaultConfig config;
     private final SuggestionManager suggestionManager;
     private final AccountStatusManager accountStatusManager;
     private final GrandExchangeUncollectedManager uncollectedManager;
@@ -56,7 +56,7 @@ public class SuggestionController {
 
     private MainPanel mainPanel;
     private LoginPanel loginPanel;
-    private CopilotPanel copilotPanel;
+    private FVPanel fvPanel;
     private SuggestionPanel suggestionPanel;
 
     public void togglePause() {
@@ -132,7 +132,7 @@ public class SuggestionController {
 
     public void getSuggestionAsync() {
         suggestionManager.setSuggestionNeeded(false);
-        if (!copilotLoginRS.get().isLoggedIn() || !osrsLoginManager.isValidLoginState()) {
+        if (!fvLoginRS.get().isLoggedIn() || !osrsLoginManager.isValidLoginState()) {
             return;
         }
         if (suggestionManager.isSuggestionRequestInProgress()) {
@@ -160,7 +160,7 @@ public class SuggestionController {
             suggestionManager.setSuggestionRequestInProgress(false);
             suggestionManager.setGraphDataReadingInProgress(false);
             if (e.getResponseCode() == 401) {
-                copilotLoginRS.clear();
+                fvLoginRS.clear();
                 mainPanel.refresh();
                 loginPanel.showLoginErrorMessage("Login timed out. Please log in again");
             } else {
@@ -169,7 +169,7 @@ public class SuggestionController {
         };
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        apiRequestHandler.getSuggestionAsync(accountStatus.toJson(gson, grandExchange.isOpen(), config.priceGraphWebsite() == FlippingCopilotConfig.PriceGraphWebsite.FLIPPING_COPILOT), suggestionConsumer, graphDataConsumer, onFailure, skipGraphData);
+        apiRequestHandler.getSuggestionAsync(accountStatus.toJson(gson, grandExchange.isOpen(), config.priceGraphWebsite() == FlipVaultConfig.PriceGraphWebsite.FLIPVAULT), suggestionConsumer, graphDataConsumer, onFailure, skipGraphData);
     }
 
     void handleDumpSuggestion(Suggestion suggestion) {
@@ -244,7 +244,7 @@ public class SuggestionController {
             if (config.enableTrayNotifications()) {
                 notifier.notify(msg);
             }
-            if (!copilotPanel.isShowing() && config.enableChatNotifications()) {
+            if (!fvPanel.isShowing() && config.enableChatNotifications()) {
                 showChatNotifications(newSuggestion, accountStatus);
             }
         }

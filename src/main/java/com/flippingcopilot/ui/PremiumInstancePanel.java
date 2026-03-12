@@ -1,7 +1,7 @@
 package com.flippingcopilot.ui;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.model.PremiumInstanceStatus;
 import com.flippingcopilot.model.SuggestionManager;
 import lombok.extern.slf4j.Slf4j;
@@ -19,11 +19,11 @@ public class PremiumInstancePanel extends JPanel {
     private final CardLayout cardLayout;
     private final JPanel cardPanel;
     private final List<JComboBox<String>> instanceDropdowns;
-    private final FlippingCopilotConfig config;
+    private final FlipVaultConfig config;
     private final ApiRequestHandler apiRequestHandler;
     private final SuggestionManager suggestionManager;
 
-    public PremiumInstancePanel(FlippingCopilotConfig config, ApiRequestHandler apiRequestHandler, SuggestionManager suggestionManager) {
+    public PremiumInstancePanel(FlipVaultConfig config, ApiRequestHandler apiRequestHandler, SuggestionManager suggestionManager) {
         this.config = config;
         this.apiRequestHandler = apiRequestHandler;
         this.suggestionManager = suggestionManager;

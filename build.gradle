@@ -32,7 +32,7 @@ tasks.withType(JavaCompile) {
 
 tasks.register('run', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
-	mainClass = 'com.flippingcopilot.FlippingCopilotPluginTest'
+	mainClass = 'com.flippingcopilot.FlipVaultPluginTest'
 	enableAssertions = true
 	jvmArgs = ['-ea', '--add-exports', 'java.desktop/com.apple.eawt=ALL-UNNAMED']
 }

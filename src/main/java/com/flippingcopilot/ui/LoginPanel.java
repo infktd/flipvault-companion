@@ -1,7 +1,7 @@
 package com.flippingcopilot.ui;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.controller.CopilotLoginController;
+import com.flippingcopilot.controller.FVLoginController;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
@@ -24,7 +24,7 @@ import java.awt.event.ActionEvent;
 public class LoginPanel extends JPanel {
     private final static int PAGE_WIDTH = 225;
 
-    private final CopilotLoginController copilotLoginController;
+    private final FVLoginController fvLoginController;
     private final ApiRequestHandler apiRequestHandler;
 
     private final JButton signUpButton = new JButton("Sign up");
@@ -40,8 +40,8 @@ public class LoginPanel extends JPanel {
     private volatile Call discordLoginCall;
 
     @Inject
-    public LoginPanel(CopilotLoginController copilotLoginController, ApiRequestHandler apiRequestHandler) {
-        this.copilotLoginController = copilotLoginController;
+    public LoginPanel(FVLoginController fvLoginController, ApiRequestHandler apiRequestHandler) {
+        this.fvLoginController = fvLoginController;
         this.apiRequestHandler = apiRequestHandler;
         this.setLayout(new BorderLayout());
         this.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -170,7 +170,7 @@ public class LoginPanel extends JPanel {
         loginButton.setPreferredSize(new Dimension((PAGE_WIDTH - 8) / 2, 36));
         loginButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         loginButton.addActionListener((ActionEvent a) -> {
-            copilotLoginController.onLoginPressed(emailTextField.getText(), passwordTextField.getText());
+            fvLoginController.onLoginPressed(emailTextField.getText(), passwordTextField.getText());
         });
         container.add(signUpButton);
         container.add(loginButton);
@@ -187,12 +187,12 @@ public class LoginPanel extends JPanel {
             discordLoginCall = apiRequestHandler.discordLoginAsync(
                     LinkBrowser::browse,
                 (loginResponse) -> {
-                    copilotLoginController.onLoginResponse(loginResponse);
+                    fvLoginController.onLoginResponse(loginResponse);
                     endLoading();
                 },
                 (error) -> {
                     String msg = discordLoginCall == null ? "Discord login cancelled" : error.getResponseMessage();
-                    copilotLoginController.onLoginFailure(msg);
+                    fvLoginController.onLoginFailure(msg);
                     endLoading();
                 }
             );

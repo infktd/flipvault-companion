@@ -47,7 +47,7 @@ public class Offer {
 
     @Setter
     @SerializedName("copilot_price_used")
-    private boolean copilotPriceUsed;
+    private boolean fvPriceUsed;
 
     public static Offer getEmptyOffer(int slotId) {
         return new Offer(OfferStatus.EMPTY, 0, 0, 0, 0, 0, 0, 0, slotId, false, false);

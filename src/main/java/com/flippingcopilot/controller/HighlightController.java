@@ -1,6 +1,6 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.model.*;
 import com.flippingcopilot.ui.WidgetHighlightOverlay;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ import java.util.function.Supplier;
 public class HighlightController {
 
     // dependencies
-    private final FlippingCopilotConfig config;
+    private final FlipVaultConfig config;
     private final SuggestionManager suggestionManager;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
     private final GrandExchange grandExchange;

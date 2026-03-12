@@ -21,9 +21,9 @@ public class SuggestionManager {
     private int lastOfferSubmittedTick = -1;
 
     // these two variables get set based on the current suggestion when the confirm offer button is clicked.
-    // this allows us to track on the subsequent offer events whether the offer originates from a copilot suggestion
+    // this allows us to track on the subsequent offer events whether the offer originates from a FV suggestion
     // this flag can then eventually be propagated onto each transaction and can be used by the server to
-    // determine which items in the inventory were bought based upon copilot suggestions and which are not
+    // determine which items in the inventory were bought based upon FV suggestions and which are not
     private int suggestionItemIdOnOfferSubmitted = -1;
     private OfferStatus suggestionOfferStatusOnOfferSubmitted = null;
 

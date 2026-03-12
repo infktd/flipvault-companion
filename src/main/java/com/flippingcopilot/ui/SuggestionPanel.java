@@ -1,11 +1,11 @@
 package com.flippingcopilot.ui;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.controller.GrandExchange;
 import com.flippingcopilot.controller.HighlightController;
 import com.flippingcopilot.controller.PremiumInstanceController;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.CopilotLoginRS;
+import com.flippingcopilot.rs.FVLoginRS;
 import com.flippingcopilot.ui.flipsdialog.FlipsDialogController;
 import com.flippingcopilot.util.ProfitCalculator;
 import joptsimple.internal.Strings;
@@ -36,7 +36,7 @@ import static com.flippingcopilot.util.Constants.MIN_GP_NEEDED_TO_FLIP;
 public class SuggestionPanel extends JPanel {
 
     // dependencies
-    private final FlippingCopilotConfig config;
+    private final FlipVaultConfig config;
     private final SuggestionManager suggestionManager;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
     private final AccountStatusManager accountStatusManager;
@@ -76,7 +76,7 @@ public class SuggestionPanel extends JPanel {
 
 
     @Inject
-    public SuggestionPanel(FlippingCopilotConfig config,
+    public SuggestionPanel(FlipVaultConfig config,
                            SuggestionManager suggestionManager,
                            SuggestionPreferencesManager suggestionPreferencesManager,
                            AccountStatusManager accountStatusManager,
@@ -232,7 +232,7 @@ public class SuggestionPanel extends JPanel {
 
         BufferedImage graphIcon = ImageUtil.loadImageResource(getClass(), "/graph.png");
         graphButton = buildButton(graphIcon, "Price graph", () -> {
-            if(config.priceGraphWebsite().equals(FlippingCopilotConfig.PriceGraphWebsite.FLIPPING_COPILOT)) {
+            if(config.priceGraphWebsite().equals(FlipVaultConfig.PriceGraphWebsite.FLIPVAULT)) {
                 Suggestion suggestion = suggestionManager.getSuggestion();
                 if(isSuggestionWithoutGraphData(suggestion)) {
                     flipsDialogController.showPriceGraphTab(suggestion.getItemId(), false, null);

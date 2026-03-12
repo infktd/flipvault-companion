@@ -15,8 +15,8 @@ public class SavedOffer
 	private int price;
 	private int spent;
 	private GrandExchangeOfferState state;
-	private boolean copilotPriceUsed;
-	private boolean wasCopilotSuggestion;
+	private boolean fvPriceUsed;
+	private boolean wasFvSuggestion;
 
 
 	public static SavedOffer fromGrandExchangeOffer(GrandExchangeOffer offer) {
@@ -68,6 +68,6 @@ public class SavedOffer
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(itemId, quantitySold, totalQuantity, price, spent, state, copilotPriceUsed);
+		return Objects.hash(itemId, quantitySold, totalQuantity, price, spent, state, fvPriceUsed);
 	}
 }

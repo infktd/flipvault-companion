@@ -1,6 +1,6 @@
 package com.flippingcopilot.ui;
 
-import com.flippingcopilot.config.FlippingCopilotConfig;
+import com.flippingcopilot.config.FlipVaultConfig;
 import com.flippingcopilot.model.FlipV2;
 import net.runelite.client.ui.ColorScheme;
 
@@ -15,7 +15,7 @@ import static com.flippingcopilot.util.DateUtil.formatEpoch;
 
 public class FlipPanel extends JPanel {
 
-    public FlipPanel(FlipV2 flip, FlippingCopilotConfig config) {
+    public FlipPanel(FlipV2 flip, FlipVaultConfig config) {
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
