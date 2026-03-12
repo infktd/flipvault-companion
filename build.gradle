@@ -1,52 +1,38 @@
 plugins {
-    id 'java'
+	id 'java'
 }
 
 repositories {
-    mavenLocal()
-    maven {
-        url = 'https://repo.runelite.net'
-        content {
-            includeGroupByRegex("net\\.runelite.*")
-        }
-    }
-    mavenCentral()
+	maven {
+		url = 'https://repo.runelite.net'
+	}
+	mavenCentral()
+	mavenLocal()
 }
 
 def runeLiteVersion = 'latest.release'
 
 dependencies {
-    compileOnly group: 'net.runelite', name: 'client', version: runeLiteVersion
-    compileOnly 'com.squareup.okhttp3:okhttp:4.12.0'
-
-    compileOnly 'org.projectlombok:lombok:1.18.40'
-    annotationProcessor 'org.projectlombok:lombok:1.18.40'
-
-    testImplementation 'junit:junit:4.12'
-    testImplementation group: 'net.runelite', name: 'client', version: runeLiteVersion
-    testImplementation group: 'net.runelite', name: 'jshell', version: runeLiteVersion
+	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
+	compileOnly 'org.projectlombok:lombok:1.18.40'
+	annotationProcessor 'org.projectlombok:lombok:1.18.40'
+	testImplementation 'junit:junit:4.13.1'
+	testImplementation group: 'net.runelite', name:'client', version: runeLiteVersion
+	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
-group = 'com.flipvault'
-version = '0.1.0'
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-    options.release.set(11)
-}
+group = 'com.flippingcopilot'
+version = '1.7.22'
 
-// Don't fail when no JUnit tests are found (the test class is a launcher, not a test)
-test {
-    failOnNoDiscoveredTests = false
+tasks.withType(JavaCompile) {
+	options.encoding = 'UTF-8'
+	options.release.set(11)
 }
 
 tasks.register('run', JavaExec) {
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.flipvault.plugin.FlipVaultPluginTest'
-
-    jvmArgs "-ea",
-        "--add-opens", "java.desktop/com.apple.eawt=ALL-UNNAMED",
-        "--add-exports", "java.desktop/com.apple.eawt=ALL-UNNAMED",
-        "--enable-native-access=ALL-UNNAMED"
-    args "--developer-mode", "--debug"
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.flippingcopilot.FlippingCopilotPluginTest'
+	enableAssertions = true
+	jvmArgs = ['-ea', '--add-exports', 'java.desktop/com.apple.eawt=ALL-UNNAMED']
 }
