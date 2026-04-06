@@ -457,7 +457,7 @@ public class SuggestionPanel extends JPanel {
         if (suggestion == null) {
             return;
         }
-        AccountStatus accountStatus = accountStatusManager.getAccountStatus();
+        AccountStatus accountStatus = accountStatusManager.getCachedStatus();
         if(accountStatus == null) {
             return;
         }

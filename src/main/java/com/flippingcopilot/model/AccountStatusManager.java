@@ -26,16 +26,24 @@ public class AccountStatusManager {
     // state
     @Setter
     private int skipSuggestion = -1;
+    private volatile AccountStatus cachedStatus = null;
+
+    public AccountStatus getCachedStatus() {
+        return cachedStatus;
+    }
 
     public synchronized AccountStatus getAccountStatus() {
         Long accountHash =  osrsLoginManager.getAccountHash();
         ItemContainer itemContainer = client.getItemContainer(InventoryID.INV);
         Inventory inventory;
+        boolean inventoryValid;
         if(itemContainer == null) {
             log.warn("Item container was null!");
             inventory = new Inventory();
+            inventoryValid = false;
         } else {
             inventory = Inventory.fromRunelite(itemContainer, client);
+            inventoryValid = true;
         }
         Map<Integer, Long> u = geUncollected.loadAllUncollected(accountHash);
 
@@ -83,6 +91,9 @@ public class AccountStatusManager {
             }
         }
 
+        if (inventoryValid) {
+            cachedStatus = status;
+        }
         return status;
     }
 
@@ -109,5 +120,6 @@ public class AccountStatusManager {
 
     public void reset() {
         skipSuggestion = -1;
+        cachedStatus = null;
     }
 }

@@ -2,6 +2,7 @@ package com.flippingcopilot.model;
 
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.util.Constants;
+import com.flippingcopilot.util.ProfitCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,10 @@ public class FlipManager {
     final Map<Integer, Map<Integer, FlipV2>> lastOpenFlipByItemId = new HashMap<>();
     final Map<UUID, Integer> existingCloseTimes = new HashMap<>();
     final List<WeekAggregate> weeks = new ArrayList<>(365*5);
+
+    // Local buy tracker: displayName -> itemId -> [totalSpent, totalQuantity]
+    // Used for session profit estimation when server-side account data is unavailable.
+    private final Map<String, Map<Integer, long[]>> localBuyTracker = new HashMap<>();
 
 
     public synchronized Integer getIntervalAccount() {
@@ -219,6 +224,39 @@ public class FlipManager {
         return pageFlips;
     }
 
+    public synchronized void trackLocalBuy(String displayName, int itemId, long amountSpent, int quantity) {
+        long[] buy = localBuyTracker
+                .computeIfAbsent(displayName, k -> new HashMap<>())
+                .computeIfAbsent(itemId, k -> new long[]{0, 0});
+        buy[0] += amountSpent;
+        buy[1] += quantity;
+        log.debug("local buy tracked: {} x item {}, spent {}, running total qty={}", quantity, itemId, amountSpent, buy[1]);
+    }
+
+    public synchronized Long estimateLocalProfit(String displayName, Transaction t) {
+        if (!OfferStatus.SELL.equals(t.getType())) return null;
+        Map<Integer, long[]> itemMap = localBuyTracker.get(displayName);
+        if (itemMap == null) return null;
+        long[] buy = itemMap.get(t.getItemId());
+        if (buy == null || buy[1] <= 0) return null;
+
+        long sellQty = t.getQuantity();
+        long proportionalBuyCost = (buy[0] * sellQty) / buy[1];
+        int grossSellPricePerUnit = (int) (t.getAmountSpent() / sellQty);
+        int postTaxSellPrice = ProfitCalculator.getPostTaxPrice(t.getItemId(), grossSellPricePerUnit);
+        long profit = (long) postTaxSellPrice * sellQty - proportionalBuyCost;
+
+        // Consume the matched buy quantity
+        buy[0] -= proportionalBuyCost;
+        buy[1] -= sellQty;
+        if (buy[1] <= 0) {
+            itemMap.remove(t.getItemId());
+        }
+
+        log.debug("local profit estimate for item {}: {} gp (qty={})", t.getItemId(), profit, sellQty);
+        return profit;
+    }
+
     public synchronized void reset() {
         intervalAccount = null;
         intervalStartTime = 0;
@@ -227,6 +265,7 @@ public class FlipManager {
         lastOpenFlipByItemId.clear();
         existingCloseTimes.clear();
         weeks.clear();
+        localBuyTracker.clear();
     }
 
     private void mergeFlip_(FlipV2 flip) {

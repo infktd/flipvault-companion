@@ -31,10 +31,11 @@ public class SessionManager {
     private final Map<String, File> displayNameToFile = new HashMap<>();
 
     private Instant lastSessionUpdateTime;
+    private Runnable profitUpdatedCallback = () -> {};
 
     public synchronized SessionData getCachedSessionData() {
         SessionData sd = getSessionData(osrsLoginManager.getPlayerDisplayName());
-        return new SessionData(sd.startTime,  sd.durationMillis, sd.averageCash);
+        return new SessionData(sd.startTime, sd.durationMillis, sd.averageCash, sd.sessionProfit);
     }
 
     public synchronized void resetSession() {
@@ -43,7 +44,20 @@ public class SessionManager {
         sd.startTime = (int) Instant.now().getEpochSecond();
         sd.averageCash = 0;
         sd.durationMillis = 0;
+        sd.sessionProfit = 0;
         saveAsync(displayName);
+    }
+
+    public void setProfitUpdatedCallback(Runnable callback) {
+        this.profitUpdatedCallback = callback;
+    }
+
+    public synchronized void addSessionProfit(long profit, String displayName) {
+        if (displayName == null || profit == 0) return;
+        SessionData sd = getSessionData(displayName);
+        sd.sessionProfit += profit;
+        saveAsync(displayName);
+        profitUpdatedCallback.run();
     }
 
     public synchronized boolean updateSessionStats(boolean currentlyFlipping, long cashStack) {
@@ -83,20 +97,31 @@ public class SessionManager {
         });
     }
 
-     private SessionData load(String displayName) {
+    private static final int SESSION_MAX_AGE_SECONDS = 6 * 60 * 60; // 6 hours
+
+    private SessionData freshSession() {
+        return new SessionData((int) Instant.now().getEpochSecond(), 0, 0, 0);
+    }
+
+    private SessionData load(String displayName) {
         File file = getFile(displayName);
         if (!file.exists()) {
-            return new SessionData((int) Instant.now().getEpochSecond(), 0 ,0);
+            return freshSession();
         }
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            SessionData sd =  gson.fromJson(reader, SessionData.class);
+            SessionData sd = gson.fromJson(reader, SessionData.class);
             if (sd != null) {
+                int now = (int) Instant.now().getEpochSecond();
+                if (now - sd.startTime > SESSION_MAX_AGE_SECONDS) {
+                    log.info("session data for {} is stale ({}s old), starting fresh", displayName, now - sd.startTime);
+                    return freshSession();
+                }
                 return sd;
             }
         } catch (JsonSyntaxException | JsonIOException | IOException e) {
             log.warn("error loading session data json file {}", file, e);
         }
-        return new SessionData((int) Instant.now().getEpochSecond(), 0 ,0);
+        return freshSession();
     }
 
     private File getFile(String displayName) {

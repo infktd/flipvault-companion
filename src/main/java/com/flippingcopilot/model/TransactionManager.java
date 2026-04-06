@@ -29,6 +29,7 @@ public class TransactionManager {
     private final ApiRequestHandler api;
     private final FVLoginRS fvLoginRS;
     private final OsrsLoginManager osrsLoginManager;
+    private final SessionManager sessionManager;
 
     // state
     private final ConcurrentMap<String, List<Transaction>> cachedUnAckedTransactions = new ConcurrentHashMap<>();
@@ -85,20 +86,32 @@ public class TransactionManager {
             unAckedTransactions.add(transaction);
             Persistance.storeUnAckedTransactions(unAckedTransactions, displayName);
         }
-        MutableReference<Long> profit = new MutableReference<>(0L);
-        if (OfferStatus.SELL.equals(transaction.getType())) {
+
+        long profit = 0;
+        if (OfferStatus.BUY.equals(transaction.getType())) {
+            // Track buy locally so we can estimate profit when the paired sell comes in
+            flipManager.trackLocalBuy(displayName, transaction.getItemId(), transaction.getAmountSpent(), transaction.getQuantity());
+        } else if (OfferStatus.SELL.equals(transaction.getType())) {
+            // Try server-side estimate first (requires account data from server)
             Integer accountId = fvLoginRS.get().getAccountId(displayName);
             if (accountId != null && accountId != -1) {
                 Long p = flipManager.estimateTransactionProfit(accountId, transaction);
-                if (p != null) {
-                    profit.setValue(p);
-                }
+                if (p != null) profit = p;
+            }
+            // Fall back to local estimate if server data is unavailable
+            if (profit == 0) {
+                Long p = flipManager.estimateLocalProfit(displayName, transaction);
+                if (p != null) profit = p;
+            }
+            if (profit != 0) {
+                sessionManager.addSessionProfit(profit, displayName);
             }
         }
+
         if (fvLoginRS.get().isLoggedIn()) {
             scheduleSyncIn(0, displayName);
         }
-        return profit.getValue();
+        return profit;
     }
 
     public List<Transaction> getUnAckedTransactions(String displayName) {
