@@ -1,6 +1,7 @@
 package com.flippingcopilot.model;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
+import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.controller.Persistance;
 import com.flippingcopilot.rs.FVLoginRS;
 import com.flippingcopilot.util.MutableReference;
@@ -30,6 +31,7 @@ public class TransactionManager {
     private final FVLoginRS fvLoginRS;
     private final OsrsLoginManager osrsLoginManager;
     private final SessionManager sessionManager;
+    private final ItemController itemController;
 
     // state
     private final ConcurrentMap<String, List<Transaction>> cachedUnAckedTransactions = new ConcurrentHashMap<>();
@@ -105,6 +107,13 @@ public class TransactionManager {
             }
             if (profit != 0) {
                 sessionManager.addSessionProfit(profit, displayName);
+                sessionManager.addSessionTrade(new SessionTrade(
+                        transaction.getItemId(),
+                        itemController.getItemName(transaction.getItemId()),
+                        transaction.getQuantity(),
+                        profit,
+                        System.currentTimeMillis()
+                ));
             }
         }
 

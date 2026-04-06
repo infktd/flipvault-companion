@@ -12,8 +12,7 @@ import javax.inject.Singleton;
 import java.io.*;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 
 @Singleton
@@ -27,8 +26,11 @@ public class SessionManager {
     private final ScheduledExecutorService executorService;
     private final Gson gson;
 
+    private static final int MAX_SESSION_TRADES = 50;
+
     private final Map<String, SessionData> cachedSessionData =  new HashMap<>();
     private final Map<String, File> displayNameToFile = new HashMap<>();
+    private final List<SessionTrade> sessionTrades = new ArrayList<>();
 
     private Instant lastSessionUpdateTime;
     private Runnable profitUpdatedCallback = () -> {};
@@ -45,6 +47,7 @@ public class SessionManager {
         sd.averageCash = 0;
         sd.durationMillis = 0;
         sd.sessionProfit = 0;
+        sessionTrades.clear();
         saveAsync(displayName);
     }
 
@@ -58,6 +61,17 @@ public class SessionManager {
         sd.sessionProfit += profit;
         saveAsync(displayName);
         profitUpdatedCallback.run();
+    }
+
+    public synchronized void addSessionTrade(SessionTrade trade) {
+        sessionTrades.add(0, trade); // newest first
+        if (sessionTrades.size() > MAX_SESSION_TRADES) {
+            sessionTrades.remove(sessionTrades.size() - 1);
+        }
+    }
+
+    public synchronized List<SessionTrade> getSessionTrades() {
+        return new ArrayList<>(sessionTrades);
     }
 
     public synchronized boolean updateSessionStats(boolean currentlyFlipping, long cashStack) {
