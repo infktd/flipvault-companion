@@ -57,8 +57,14 @@ public class AccountStatus {
             return true;
         }
         if (!inventory.hasSufficientItems(suggestion)) {
-            log.debug("collected needed hasSufficientItems");
-            return true;
+            // Don't trigger collect if the item is still actively buying in the GE —
+            // collecting would abort the buy order and we'd end up selling partial fills
+            if (offers.hasActiveBuyForItem(suggestion.getItemId())) {
+                log.debug("skipping collect — item {} still has an active buy offer", suggestion.getItemId());
+            } else {
+                log.debug("collected needed hasSufficientItems");
+                return true;
+            }
         }
         return false;
     }

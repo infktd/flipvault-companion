@@ -60,6 +60,11 @@ public class StatusOfferList extends ArrayList<Offer> {
         return stream().anyMatch(offer -> offer.getStatus() != OfferStatus.EMPTY && !offer.isActive());
     }
 
+    public boolean hasActiveBuyForItem(int itemId) {
+        return stream().anyMatch(offer ->
+                offer.getStatus() == OfferStatus.BUY && offer.isActive() && offer.getItemId() == itemId);
+    }
+
     public long getGpOnMarket() {
         return stream().mapToLong(Offer::cashStackGpValue).sum();
     }
