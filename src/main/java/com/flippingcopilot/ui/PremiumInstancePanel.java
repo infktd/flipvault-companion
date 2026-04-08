@@ -112,23 +112,30 @@ public class PremiumInstancePanel extends JPanel {
         scrollContent.setLayout(new BoxLayout(scrollContent, BoxLayout.Y_AXIS));
         scrollContent.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        for (int i = 0; i < status.getPremiumInstancesCount(); i++) {
+        // availableDisplayNames layout: [0..keyCount-1] = key labels, [keyCount..] = RSN options
+        int keyCount = status.getPremiumInstancesCount();
+        List<String> allNames = status.getAvailableDisplayNames();
+        List<String> rsnOptions = allNames != null && allNames.size() > keyCount
+                ? allNames.subList(keyCount, allNames.size())
+                : new ArrayList<>();
+
+        for (int i = 0; i < keyCount; i++) {
             JPanel row = new JPanel();
             row.setLayout(new FlowLayout(FlowLayout.LEFT));
             row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
             row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
 
-            // Key label — show the prefix from availableDisplayNames
-            String keyLabel = i < status.getAvailableDisplayNames().size()
-                    ? status.getAvailableDisplayNames().get(i) : "Key " + (i + 1);
+            // Key label from first N entries
+            String keyLabel = (allNames != null && i < allNames.size())
+                    ? allNames.get(i) : "Key " + (i + 1);
             JLabel label = new JLabel(keyLabel + ":");
             label.setForeground(Color.WHITE);
-            label.setPreferredSize(new Dimension(160, 25));
+            label.setPreferredSize(new Dimension(190, 25));
             row.add(label);
 
             // RSN dropdown
             JComboBox<String> dropdown = new JComboBox<>();
-            dropdown.setPreferredSize(new Dimension(180, 25));
+            dropdown.setPreferredSize(new Dimension(150, 25));
             dropdown.addItem("Unassigned");
 
             // Current assignment
@@ -144,7 +151,7 @@ public class PremiumInstancePanel extends JPanel {
             }
 
             // Add other available RSNs (skip the one already selected)
-            for (String rsn : status.getAvailableDisplayNames()) {
+            for (String rsn : rsnOptions) {
                 if (!rsn.equals(currentRsn)) {
                     dropdown.addItem(rsn);
                 }
