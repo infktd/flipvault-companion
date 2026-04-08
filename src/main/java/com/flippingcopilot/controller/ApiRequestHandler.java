@@ -467,10 +467,14 @@ public class ApiRequestHandler {
         });
     }
 
-    public void asyncGetPremiumInstanceStatus(Consumer<PremiumInstanceStatus> consumer) {
+    public void asyncGetPremiumInstanceStatus(Consumer<PremiumInstanceStatus> consumer, String currentDisplayName) {
         String jwtToken = fvLoginRS.get().getJwtToken();
+        String url = serverUrl + "/premium-instances/status";
+        if (currentDisplayName != null && !currentDisplayName.isEmpty()) {
+            url += "?display_name=" + URLEncoder.encode(currentDisplayName, StandardCharsets.UTF_8);
+        }
         Request request = new Request.Builder()
-                .url(serverUrl +"/premium-instances/status")
+                .url(url)
                 .addHeader("Authorization", "Bearer " + jwtToken)
                 .get()
                 .build();
