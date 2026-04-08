@@ -165,12 +165,22 @@ public class PremiumInstancePanel extends JPanel {
         scrollPane.getViewport().setBackground(ColorScheme.DARKER_GRAY_COLOR);
         managementPanel.add(scrollPane, BorderLayout.CENTER);
 
-        // Bottom: save button
+        // Bottom: changes remaining + save button
         JPanel bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
 
+        int changes = status.getChangesRemaining();
+        JLabel changesLabel = new JLabel("Changes remaining: " + changes);
+        changesLabel.setForeground(changes > 0 ? ColorScheme.LIGHT_GRAY_COLOR : Color.RED);
+        changesLabel.setToolTipText("Recharges 1 per day, max 5");
+        bottomPanel.add(changesLabel, BorderLayout.WEST);
+
         JButton saveButton = new JButton("Save");
+        saveButton.setEnabled(changes > 0);
+        if (changes <= 0) {
+            saveButton.setToolTipText("No changes remaining. Wait for daily recharge.");
+        }
         saveButton.addActionListener(e -> {
             this.showLoading();
             Consumer<PremiumInstanceStatus> c = (s) -> {
