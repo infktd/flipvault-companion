@@ -23,7 +23,6 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
-import java.util.List;
 
 import static com.flippingcopilot.ui.UIUtilities.BUTTON_HOVER_LUMINANCE;
 
@@ -59,7 +58,6 @@ public class StatsPanelV2 extends JPanel {
     private final JButton sessionResetButton = new JButton("  Reset session ");
     private JPanel profitAndSubInfoPanel;
     private JPanel subInfoPanel;
-    private final JPanel sessionTradesPanel = new JPanel();
     private final JPanel flipsPanel = new JPanel();
     private final JLabel totalProfitVal = new JLabel("0 gp");
     private final JLabel roiVal = new JLabel("-0.00%");
@@ -100,21 +98,11 @@ public class StatsPanelV2 extends JPanel {
         setupSessionResetButton();
         setupFlipsDialogButton();
 
-        sessionTradesPanel.setLayout(new BoxLayout(sessionTradesPanel, BoxLayout.Y_AXIS));
-        sessionTradesPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        sessionTradesPanel.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-
         flipsPanel.setLayout(new BoxLayout(flipsPanel, BoxLayout.Y_AXIS));
         flipsPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         flipsPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
-        JPanel combinedFlipsPanel = new JPanel();
-        combinedFlipsPanel.setLayout(new BoxLayout(combinedFlipsPanel, BoxLayout.Y_AXIS));
-        combinedFlipsPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        combinedFlipsPanel.add(sessionTradesPanel);
-        combinedFlipsPanel.add(flipsPanel);
-
-        JScrollPane scrollPane = new JScrollPane(combinedFlipsPanel);
+        JScrollPane scrollPane = new JScrollPane(flipsPanel);
         scrollPane.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         scrollPane.getVerticalScrollBar().setPreferredSize(new Dimension(2, 0));
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -333,25 +321,6 @@ public class StatsPanelV2 extends JPanel {
 
     }
 
-    private JPanel buildSessionTradeRow(SessionTrade trade) {
-        JPanel row = new JPanel(new BorderLayout());
-        row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-
-        String label = trade.getQuantity() + " x " + UIUtilities.truncateString(trade.getItemName(), 19);
-        JLabel itemLabel = new JLabel(label);
-        itemLabel.setFont(FontManager.getRunescapeSmallFont());
-        itemLabel.setForeground(Color.WHITE);
-
-        JLabel profitLabel = new JLabel(UIUtilities.formatProfitWithoutGp(trade.getProfit()));
-        profitLabel.setFont(FontManager.getRunescapeSmallFont());
-        profitLabel.setForeground(UIUtilities.getProfitColor(trade.getProfit(), config));
-
-        row.add(itemLabel, BorderLayout.LINE_START);
-        row.add(profitLabel, BorderLayout.LINE_END);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
-        return row;
-    }
-
     // called when:
     //
     // - time interval drop down changed (Swing EDT thread)
@@ -428,25 +397,5 @@ public class StatsPanelV2 extends JPanel {
             SESSION_STATS_INDS.forEach(i -> subInfoPanel.getComponent(i).setVisible(false));
         }
 
-        // Session trades log — shows recent sells with item name + profit
-        sessionTradesPanel.removeAll();
-        if (isSession) {
-            List<SessionTrade> trades = sessionManager.getSessionTrades();
-            if (!trades.isEmpty()) {
-                JLabel header = new JLabel("Recent Trades");
-                header.setFont(FontManager.getRunescapeSmallFont());
-                header.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-                header.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
-                sessionTradesPanel.add(header);
-                for (SessionTrade trade : trades) {
-                    sessionTradesPanel.add(buildSessionTradeRow(trade));
-                }
-                sessionTradesPanel.add(Box.createRigidArea(new Dimension(0, 4)));
-            }
-            sessionTradesPanel.setVisible(true);
-        } else {
-            sessionTradesPanel.setVisible(false);
-        }
-        sessionTradesPanel.revalidate();
     }
 }
