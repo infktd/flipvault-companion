@@ -35,43 +35,34 @@ public class PremiumInstancePanel extends JPanel {
         cardPanel = new JPanel(cardLayout);
         cardPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // Create loading panel
-        JPanel loadingPanel = createLoadingPanel();
-        cardPanel.add(loadingPanel, "loading");
+        cardPanel.add(createLoadingPanel(), "loading");
 
-        // Create error panel container (will be populated when error occurs)
         JPanel errorPanel = new JPanel(new BorderLayout());
         errorPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         cardPanel.add(errorPanel, "error");
 
-        // Create management panel container (will be populated when data loads)
         JPanel managementPanel = new JPanel(new BorderLayout());
         managementPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         cardPanel.add(managementPanel, "management");
 
         add(cardPanel, BorderLayout.CENTER);
-
         instanceDropdowns = new ArrayList<>();
     }
 
     private JPanel createLoadingPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.insets = new Insets(0, 0, 10, 0);
-
         Spinner spinner = new Spinner();
         spinner.show();
         panel.add(spinner, gbc);
-
         gbc.gridy = 1;
         JLabel loadingLabel = new JLabel("Loading API key data...");
         loadingLabel.setForeground(Color.WHITE);
         panel.add(loadingLabel, gbc);
-
         return panel;
     }
 
@@ -80,25 +71,22 @@ public class PremiumInstancePanel extends JPanel {
     }
 
     public void showError(String errorMessage) {
-        JPanel errorPanel = (JPanel) cardPanel.getComponent(1); // error panel
+        JPanel errorPanel = (JPanel) cardPanel.getComponent(1);
         errorPanel.removeAll();
         errorPanel.setLayout(new GridBagLayout());
-
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.insets = new Insets(10, 10, 10, 10);
-
         JLabel errorLabel = new JLabel("<html><center>" + errorMessage + "</center></html>");
         errorLabel.setForeground(Color.RED);
         errorLabel.setHorizontalAlignment(SwingConstants.CENTER);
         errorPanel.add(errorLabel, gbc);
-
         cardLayout.show(cardPanel, "error");
     }
 
     public void showManagementView(PremiumInstanceStatus status) {
-        JPanel managementPanel = (JPanel) cardPanel.getComponent(2); // management panel
+        JPanel managementPanel = (JPanel) cardPanel.getComponent(2);
         managementPanel.removeAll();
         managementPanel.setLayout(new BorderLayout());
         managementPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -109,36 +97,63 @@ public class PremiumInstancePanel extends JPanel {
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
         headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        JLabel countLabel = new JLabel(status.getPremiumInstancesCount() + " active API key" + (status.getPremiumInstancesCount() != 1 ? "s" : ""));
-        countLabel.setFont(countLabel.getFont().deriveFont(Font.BOLD));
-        countLabel.setForeground(Color.WHITE);
-        countLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        headerPanel.add(countLabel);
-        headerPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-
+        JLabel title = new JLabel(status.getPremiumInstancesCount() + " active API key" + (status.getPremiumInstancesCount() != 1 ? "s" : ""));
+        title.setFont(title.getFont().deriveFont(Font.BOLD));
+        title.setForeground(Color.WHITE);
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        headerPanel.add(title);
+        headerPanel.add(Box.createRigidArea(new Dimension(0, 15)));
         managementPanel.add(headerPanel, BorderLayout.NORTH);
 
-        // Key list
+        // Key rows with dropdowns
+        instanceDropdowns.clear();
+
         JPanel scrollContent = new JPanel();
         scrollContent.setLayout(new BoxLayout(scrollContent, BoxLayout.Y_AXIS));
         scrollContent.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        List<String> keyEntries = status.getCurrentlyAssignedDisplayNames();
-        if (keyEntries != null) {
-            for (int i = 0; i < keyEntries.size(); i++) {
-                JPanel row = new JPanel(new BorderLayout());
-                row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-                row.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createMatteBorder(0, 0, 1, 0, ColorScheme.DARK_GRAY_COLOR),
-                        BorderFactory.createEmptyBorder(8, 4, 8, 4)));
-                row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        for (int i = 0; i < status.getPremiumInstancesCount(); i++) {
+            JPanel row = new JPanel();
+            row.setLayout(new FlowLayout(FlowLayout.LEFT));
+            row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
 
-                JLabel keyLabel = new JLabel(keyEntries.get(i));
-                keyLabel.setForeground(Color.WHITE);
-                row.add(keyLabel, BorderLayout.CENTER);
+            // Key label — show the prefix from availableDisplayNames
+            String keyLabel = i < status.getAvailableDisplayNames().size()
+                    ? status.getAvailableDisplayNames().get(i) : "Key " + (i + 1);
+            JLabel label = new JLabel(keyLabel + ":");
+            label.setForeground(Color.WHITE);
+            label.setPreferredSize(new Dimension(160, 25));
+            row.add(label);
 
-                scrollContent.add(row);
+            // RSN dropdown
+            JComboBox<String> dropdown = new JComboBox<>();
+            dropdown.setPreferredSize(new Dimension(180, 25));
+            dropdown.addItem("Unassigned");
+
+            // Current assignment
+            String currentRsn = null;
+            if (i < status.getCurrentlyAssignedDisplayNames().size()) {
+                currentRsn = status.getCurrentlyAssignedDisplayNames().get(i);
             }
+
+            // Add current RSN first if bound
+            if (currentRsn != null && !currentRsn.isEmpty()) {
+                dropdown.addItem(currentRsn);
+                dropdown.setSelectedIndex(1);
+            }
+
+            // Add other available RSNs (skip the one already selected)
+            for (String rsn : status.getAvailableDisplayNames()) {
+                if (!rsn.equals(currentRsn)) {
+                    dropdown.addItem(rsn);
+                }
+            }
+
+            row.add(dropdown);
+            instanceDropdowns.add(dropdown);
+            scrollContent.add(row);
+            scrollContent.add(Box.createRigidArea(new Dimension(0, 5)));
         }
 
         scrollContent.add(Box.createVerticalGlue());
@@ -150,20 +165,40 @@ public class PremiumInstancePanel extends JPanel {
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         scrollPane.getViewport().setBackground(ColorScheme.DARKER_GRAY_COLOR);
-
         managementPanel.add(scrollPane, BorderLayout.CENTER);
 
-        // Footer
+        // Bottom: save button
         JPanel bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
 
-        JLabel footerLabel = new JLabel("Manage keys at flipvault.app/settings");
-        footerLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        bottomPanel.add(footerLabel, BorderLayout.WEST);
+        JButton saveButton = new JButton("Save");
+        saveButton.addActionListener(e -> {
+            this.showLoading();
+            Consumer<PremiumInstanceStatus> c = (s) -> {
+                SwingUtilities.invokeLater(() -> {
+                    if (s.getLoadingError() != null && !s.getLoadingError().isEmpty()) {
+                        this.showError(s.getLoadingError());
+                    } else {
+                        this.showManagementView(s);
+                        suggestionManager.setSuggestionNeeded(true);
+                    }
+                });
+            };
+            List<String> assignments = new ArrayList<>();
+            for (JComboBox<String> dd : instanceDropdowns) {
+                String selected = (String) dd.getSelectedItem();
+                if (selected != null && !selected.equals("Unassigned") && !assignments.contains(selected)) {
+                    assignments.add(selected);
+                } else {
+                    assignments.add("Unassigned");
+                }
+            }
+            apiRequestHandler.asyncUpdatePremiumInstances(c, assignments);
+        });
+        bottomPanel.add(saveButton, BorderLayout.EAST);
 
         managementPanel.add(bottomPanel, BorderLayout.SOUTH);
-
         cardLayout.show(cardPanel, "management");
     }
 }
