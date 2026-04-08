@@ -30,7 +30,7 @@ public class PremiumInstanceController {
             dialog.dispose();
         }
         dialog = new JDialog();
-        dialog.setTitle("FlipVault API Keys");
+        dialog.setTitle("Account Management");
         dialog.setModal(false);
         dialog.setSize(450, 300);
         dialog.setLocationRelativeTo(null);

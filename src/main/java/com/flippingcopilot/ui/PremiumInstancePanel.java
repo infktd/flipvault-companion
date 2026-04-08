@@ -97,7 +97,8 @@ public class PremiumInstancePanel extends JPanel {
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
         headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        JLabel title = new JLabel(status.getPremiumInstancesCount() + " active API key" + (status.getPremiumInstancesCount() != 1 ? "s" : ""));
+        int slots = status.getPremiumInstancesCount();
+        JLabel title = new JLabel("You have " + slots + " account slot" + (slots != 1 ? "s" : ""));
         title.setFont(title.getFont().deriveFont(Font.BOLD));
         title.setForeground(Color.WHITE);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -112,48 +113,38 @@ public class PremiumInstancePanel extends JPanel {
         scrollContent.setLayout(new BoxLayout(scrollContent, BoxLayout.Y_AXIS));
         scrollContent.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // availableDisplayNames layout: [0..keyCount-1] = key labels, [keyCount..] = RSN options
-        int keyCount = status.getPremiumInstancesCount();
-        List<String> allNames = status.getAvailableDisplayNames();
-        List<String> rsnOptions = allNames != null && allNames.size() > keyCount
-                ? allNames.subList(keyCount, allNames.size())
-                : new ArrayList<>();
+        List<String> rsnOptions = status.getAvailableDisplayNames();
 
-        for (int i = 0; i < keyCount; i++) {
+        for (int i = 0; i < status.getPremiumInstancesCount(); i++) {
             JPanel row = new JPanel();
             row.setLayout(new FlowLayout(FlowLayout.LEFT));
             row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
             row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
 
-            // Key label from first N entries
-            String keyLabel = (allNames != null && i < allNames.size())
-                    ? allNames.get(i) : "Key " + (i + 1);
-            JLabel label = new JLabel(keyLabel + ":");
+            JLabel label = new JLabel("Account " + (i + 1) + ":");
             label.setForeground(Color.WHITE);
-            label.setPreferredSize(new Dimension(190, 25));
+            label.setPreferredSize(new Dimension(130, 25));
             row.add(label);
 
-            // RSN dropdown
             JComboBox<String> dropdown = new JComboBox<>();
             dropdown.setPreferredSize(new Dimension(150, 25));
             dropdown.addItem("Unassigned");
 
-            // Current assignment
             String currentRsn = null;
             if (i < status.getCurrentlyAssignedDisplayNames().size()) {
                 currentRsn = status.getCurrentlyAssignedDisplayNames().get(i);
             }
 
-            // Add current RSN first if bound
             if (currentRsn != null && !currentRsn.isEmpty()) {
                 dropdown.addItem(currentRsn);
                 dropdown.setSelectedIndex(1);
             }
 
-            // Add other available RSNs (skip the one already selected)
-            for (String rsn : rsnOptions) {
-                if (!rsn.equals(currentRsn)) {
-                    dropdown.addItem(rsn);
+            if (rsnOptions != null) {
+                for (String rsn : rsnOptions) {
+                    if (!rsn.equals(currentRsn)) {
+                        dropdown.addItem(rsn);
+                    }
                 }
             }
 

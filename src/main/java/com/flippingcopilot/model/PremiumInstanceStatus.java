@@ -26,6 +26,9 @@ public class PremiumInstanceStatus {
     @SerializedName("available_display_names")
     private List<String> availableDisplayNames;
 
+    @SerializedName("key_labels")
+    private List<String> keyLabels;
+
     public static PremiumInstanceStatus ErrorInstance(String error) {
         PremiumInstanceStatus pi = new PremiumInstanceStatus();
         pi.setLoadingError(error);
