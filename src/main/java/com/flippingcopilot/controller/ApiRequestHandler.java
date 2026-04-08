@@ -135,6 +135,37 @@ public class ApiRequestHandler {
         return call;
     }
 
+    public void selectKeyAsync(String keyId, Consumer<LoginResponse> onSuccess, Consumer<HttpResponseException> onFailure) {
+        JsonObject body = new JsonObject();
+        body.addProperty("key_id", keyId);
+        Request request = new Request.Builder()
+                .url(serverUrl + "/select-key")
+                .post(RequestBody.create(MediaType.get("application/json; charset=utf-8"), body.toString()))
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                log.warn("select key call failed", e);
+                clientThread.invoke(() -> onFailure.accept(new HttpResponseException(-1, UNKNOWN_ERROR)));
+            }
+            @Override
+            public void onResponse(Call call, Response response) {
+                try {
+                    if (!response.isSuccessful()) {
+                        clientThread.invoke(() -> onFailure.accept(new HttpResponseException(response.code(), extractErrorMessage(response))));
+                        return;
+                    }
+                    LoginResponse lr = gson.fromJson(response.body().string(), LoginResponse.class);
+                    clientThread.invoke(() -> onSuccess.accept(lr));
+                } catch (Exception e) {
+                    log.warn("error parsing select key response", e);
+                    clientThread.invoke(() -> onFailure.accept(new HttpResponseException(-1, UNKNOWN_ERROR)));
+                }
+            }
+        });
+    }
+
     public void getSuggestionAsync(JsonObject status,
                                    Consumer<Suggestion> suggestionConsumer,
                                    Consumer<Data> graphDataConsumer,

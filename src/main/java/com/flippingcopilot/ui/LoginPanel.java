@@ -2,10 +2,12 @@ package com.flippingcopilot.ui;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
 import com.flippingcopilot.controller.FVLoginController;
+import com.flippingcopilot.model.ApiKeyInfo;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 import okhttp3.Call;
+import java.util.List;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -187,8 +189,12 @@ public class LoginPanel extends JPanel {
             discordLoginCall = apiRequestHandler.discordLoginAsync(
                     LinkBrowser::browse,
                 (loginResponse) -> {
-                    fvLoginController.onLoginResponse(loginResponse);
-                    endLoading();
+                    if (loginResponse.needsKeySelection()) {
+                        showKeySelectionDialog(loginResponse.getKeys());
+                    } else {
+                        fvLoginController.onLoginResponse(loginResponse);
+                        endLoading();
+                    }
                 },
                 (error) -> {
                     String msg = discordLoginCall == null ? "Discord login cancelled" : error.getResponseMessage();
@@ -232,6 +238,57 @@ public class LoginPanel extends JPanel {
         container.setPreferredSize(new Dimension(PAGE_WIDTH, 36));
         container.setAlignmentX(LEFT_ALIGNMENT);
         return container;
+    }
+
+    private void showKeySelectionDialog(List<ApiKeyInfo> keys) {
+        SwingUtilities.invokeLater(() -> {
+            String[] options = keys.stream()
+                    .map(ApiKeyInfo::getDisplayLabel)
+                    .toArray(String[]::new);
+
+            String selected = (String) JOptionPane.showInputDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    "Select which account to trade on:",
+                    "FlipVault — Select Key",
+                    JOptionPane.PLAIN_MESSAGE,
+                    null,
+                    options,
+                    options.length > 0 ? options[0] : null
+            );
+
+            if (selected == null) {
+                // User cancelled
+                endLoading();
+                return;
+            }
+
+            // Find the matching key
+            ApiKeyInfo chosen = null;
+            for (ApiKeyInfo key : keys) {
+                if (key.getDisplayLabel().equals(selected)) {
+                    chosen = key;
+                    break;
+                }
+            }
+
+            if (chosen == null) {
+                endLoading();
+                return;
+            }
+
+            // Call server to get the raw key for this selection
+            apiRequestHandler.selectKeyAsync(
+                    chosen.getId(),
+                    (loginResponse) -> {
+                        fvLoginController.onLoginResponse(loginResponse);
+                        endLoading();
+                    },
+                    (error) -> {
+                        fvLoginController.onLoginFailure(error.getResponseMessage());
+                        endLoading();
+                    }
+            );
+        });
     }
 
     public void refresh() {
