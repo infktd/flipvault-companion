@@ -224,6 +224,14 @@ public class FlipManager {
         return pageFlips;
     }
 
+    public synchronized long getLocalBuyQuantity(String displayName, int itemId) {
+        Map<Integer, long[]> itemMap = localBuyTracker.get(displayName);
+        if (itemMap == null) return 0;
+        long[] buy = itemMap.get(itemId);
+        if (buy == null) return 0;
+        return buy[1];
+    }
+
     public synchronized Long getLocalAvgBuyPrice(String displayName, int itemId) {
         Map<Integer, long[]> itemMap = localBuyTracker.get(displayName);
         if (itemMap == null) return null;

@@ -39,6 +39,7 @@ public class OfferHandler {
     private final OfferManager offerManager;
     private final HighlightController highlightController;
     private final FVLoginRS fvLoginRS;
+    private final FlipManager flipManager;
 
     // state
     private String viewedSlotPriceErrorText = null;
@@ -107,6 +108,25 @@ public class OfferHandler {
         highlightController.redraw();
     }
 
+    private int capQuantityByBuyLimit(Suggestion suggestion) {
+        if (!suggestion.isBuySuggestion()) {
+            return suggestion.getQuantity();
+        }
+        String displayName = osrsLoginManager.getPlayerDisplayName();
+        if (displayName == null) {
+            return suggestion.getQuantity();
+        }
+        // Check how many of this item we've already bought this session
+        long alreadyBought = flipManager.getLocalBuyQuantity(displayName, suggestion.getItemId());
+        if (alreadyBought >= suggestion.getQuantity()) {
+            // We've already bought at or above the suggested quantity — buy limit likely exhausted
+            log.info("buy limit likely exhausted for item {} (already bought {}, suggested {})",
+                    suggestion.getItemId(), alreadyBought, suggestion.getQuantity());
+            return 0;
+        }
+        return suggestion.getQuantity();
+    }
+
     public boolean isSettingQuantity() {
         var chatboxTitleWidget = getChatboxTitleWidget();
         if (chatboxTitleWidget == null) return false;
@@ -161,7 +181,12 @@ public class OfferHandler {
             if (suggestion == null || currentItemId != suggestion.getItemId()) {
                 return;
             }
-            setChatboxValue(suggestion.getQuantity());
+            int quantity = capQuantityByBuyLimit(suggestion);
+            if (quantity <= 0) {
+                log.info("skipping buy — GE buy limit exhausted for item {}", suggestion.getItemId());
+                return;
+            }
+            setChatboxValue(quantity);
         } else if (isSettingPrice()) {
             int price = -1;
             if (suggestion == null || currentItemId != suggestion.getItemId()

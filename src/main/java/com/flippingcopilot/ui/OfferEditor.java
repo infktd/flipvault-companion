@@ -59,6 +59,7 @@ public class OfferEditor {
             }
 
             shiftChatboxWidgetsDown();
+            // Show quantity text — OfferHandler.setSuggestedAction handles the actual cap
             showQuantity(suggestion.getQuantity());
         } else if (offerHandler.isSettingPrice()) {
             if (currentItemId != suggestion.getItemId()
