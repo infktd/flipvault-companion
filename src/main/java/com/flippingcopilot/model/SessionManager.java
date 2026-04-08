@@ -64,7 +64,22 @@ public class SessionManager {
     }
 
     public synchronized void addSessionTrade(SessionTrade trade) {
-        sessionTrades.add(0, trade); // newest first
+        // Merge with existing trade for the same item if present
+        for (int i = 0; i < sessionTrades.size(); i++) {
+            SessionTrade existing = sessionTrades.get(i);
+            if (existing.getItemId() == trade.getItemId()) {
+                sessionTrades.set(i, new SessionTrade(
+                        trade.getItemId(),
+                        trade.getItemName(),
+                        existing.getQuantity() + trade.getQuantity(),
+                        existing.getProfit() + trade.getProfit(),
+                        trade.getTimestamp()
+                ));
+                return;
+            }
+        }
+        // New item — add to front
+        sessionTrades.add(0, trade);
         if (sessionTrades.size() > MAX_SESSION_TRADES) {
             sessionTrades.remove(sessionTrades.size() - 1);
         }
