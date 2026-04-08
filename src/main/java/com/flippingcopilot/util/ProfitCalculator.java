@@ -1,5 +1,6 @@
 package com.flippingcopilot.util;
 
+import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.model.*;
 import com.flippingcopilot.rs.FVLoginRS;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class ProfitCalculator {
     private final FlipManager flipManager;
     private final OsrsLoginManager osrsLoginManager;
     private final FVLoginRS fvLoginRS;
+    private final ItemController itemController;
 
     /**
      * Calculates the post-tax price for an item.
@@ -159,22 +161,25 @@ public class ProfitCalculator {
             return null;
         }
 
+        // Try server-side flip data first
         Integer accountId = fvLoginRS.get().getAccountId(displayName);
-        if (accountId == null || accountId == -1) {
-            return null;
+        if (accountId != null && accountId != -1) {
+            FlipV2 flip = flipManager.getLastFlipByItemId(accountId, itemId);
+            if (flip != null && !FlipStatus.FINISHED.equals(flip.getStatus())) {
+                long avgBuyPrice = flip.getAvgBuyPrice();
+                if (avgBuyPrice > 0) {
+                    return calculateProfitPerItem(itemId, sellPrice, avgBuyPrice);
+                }
+            }
         }
 
-        FlipV2 flip = flipManager.getLastFlipByItemId(accountId, itemId);
-        if (flip == null || FlipStatus.FINISHED.equals(flip.getStatus())) {
-            return null;
+        // Fall back to local buy tracking
+        Long localAvgBuy = flipManager.getLocalAvgBuyPrice(displayName, itemId);
+        if (localAvgBuy != null && localAvgBuy > 0) {
+            return calculateProfitPerItem(itemId, sellPrice, localAvgBuy);
         }
 
-        long avgBuyPrice = flip.getAvgBuyPrice();
-        if (avgBuyPrice <= 0) {
-            return null;
-        }
-
-        return calculateProfitPerItem(itemId, sellPrice, avgBuyPrice);
+        return null;
     }
 
     /**
@@ -191,26 +196,33 @@ public class ProfitCalculator {
         }
 
         Integer accountId = fvLoginRS.get().getAccountId(displayName);
-        if (accountId == null || accountId == -1) {
-            return 0;
-        }
-
         long accountHash = client.getAccountHash();
-        
+
         for (int slotIndex = 0; slotIndex < GE_SLOT_COUNT; slotIndex++) {
             SavedOffer offer = offerManager.loadOffer(accountHash, slotIndex);
-            
             if (offer == null || !offer.getOfferStatus().equals(OfferStatus.SELL)) {
                 continue;
             }
 
-            FlipV2 flip = flipManager.getLastFlipByItemId(accountId, offer.getItemId());
-            if (flip == null || FlipStatus.FINISHED.equals(flip.getStatus())) {
-                continue;
+            // Try server flip data
+            if (accountId != null && accountId != -1) {
+                FlipV2 flip = flipManager.getLastFlipByItemId(accountId, offer.getItemId());
+                if (flip != null && !FlipStatus.FINISHED.equals(flip.getStatus())
+                        && flip.getCachedItemName().equals(itemName)) {
+                    return calculateOfferProfit(offer, flip);
+                }
             }
 
-            if (flip.getCachedItemName().equals(itemName)) {
-                return calculateOfferProfit(offer, flip);
+            // Fall back to local buy tracking for this item
+            String offerItemName = itemController.getItemName(offer.getItemId());
+            if (!itemName.equals(offerItemName)) {
+                continue;
+            }
+            Long localAvgBuy = flipManager.getLocalAvgBuyPrice(displayName, offer.getItemId());
+            if (localAvgBuy != null && localAvgBuy > 0) {
+                int postTaxSellPrice = getPostTaxPrice(offer.getItemId(), offer.getPrice());
+                long profitPerItem = postTaxSellPrice - localAvgBuy;
+                return profitPerItem * offer.getTotalQuantity();
             }
         }
 

@@ -224,6 +224,14 @@ public class FlipManager {
         return pageFlips;
     }
 
+    public synchronized Long getLocalAvgBuyPrice(String displayName, int itemId) {
+        Map<Integer, long[]> itemMap = localBuyTracker.get(displayName);
+        if (itemMap == null) return null;
+        long[] buy = itemMap.get(itemId);
+        if (buy == null || buy[1] <= 0) return null;
+        return buy[0] / buy[1];
+    }
+
     public synchronized void trackLocalBuy(String displayName, int itemId, long amountSpent, int quantity) {
         long[] buy = localBuyTracker
                 .computeIfAbsent(displayName, k -> new HashMap<>())
