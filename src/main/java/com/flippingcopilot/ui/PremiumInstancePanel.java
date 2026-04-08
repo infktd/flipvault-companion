@@ -68,7 +68,7 @@ public class PremiumInstancePanel extends JPanel {
         panel.add(spinner, gbc);
 
         gbc.gridy = 1;
-        JLabel loadingLabel = new JLabel("Loading premium account data");
+        JLabel loadingLabel = new JLabel("Loading API key data...");
         loadingLabel.setForeground(Color.WHITE);
         panel.add(loadingLabel, gbc);
 
@@ -104,74 +104,45 @@ public class PremiumInstancePanel extends JPanel {
         managementPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         managementPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // Create header panel for the count label
+        // Header
         JPanel headerPanel = new JPanel();
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
         headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // Add premium instances count
-        JLabel countLabel = new JLabel("You have " + status.getPremiumInstancesCount() + " premium accounts");
+        JLabel countLabel = new JLabel(status.getPremiumInstancesCount() + " active API key" + (status.getPremiumInstancesCount() != 1 ? "s" : ""));
         countLabel.setFont(countLabel.getFont().deriveFont(Font.BOLD));
         countLabel.setForeground(Color.WHITE);
         countLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         headerPanel.add(countLabel);
-        headerPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+        headerPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 
-        // Add header to the top of the management panel
         managementPanel.add(headerPanel, BorderLayout.NORTH);
 
-        // Clear existing dropdowns
-        instanceDropdowns.clear();
-
-        // Create a panel for the scrollable content
+        // Key list
         JPanel scrollContent = new JPanel();
         scrollContent.setLayout(new BoxLayout(scrollContent, BoxLayout.Y_AXIS));
         scrollContent.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // Add dropdowns for each instance
-        for (int i = 0; i < status.getPremiumInstancesCount(); i++) {
-            JPanel instancePanel = new JPanel();
-            instancePanel.setLayout(new FlowLayout(FlowLayout.LEFT));
-            instancePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            instancePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
+        List<String> keyEntries = status.getCurrentlyAssignedDisplayNames();
+        if (keyEntries != null) {
+            for (int i = 0; i < keyEntries.size(); i++) {
+                JPanel row = new JPanel(new BorderLayout());
+                row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+                row.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 0, 1, 0, ColorScheme.DARK_GRAY_COLOR),
+                        BorderFactory.createEmptyBorder(8, 4, 8, 4)));
+                row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
 
-            JLabel instanceLabel = new JLabel("Premium account " + (i + 1) + ":");
-            instanceLabel.setForeground(Color.WHITE);
-            instanceLabel.setPreferredSize(new Dimension(130, 25));
-            instancePanel.add(instanceLabel);
+                JLabel keyLabel = new JLabel(keyEntries.get(i));
+                keyLabel.setForeground(Color.WHITE);
+                row.add(keyLabel, BorderLayout.CENTER);
 
-            JComboBox<String> dropdown = new JComboBox<>();
-            dropdown.setPreferredSize(new Dimension(200, 25));
-
-            // Add current assignment if exists
-            String currentAssignment = null;
-            if (i < status.getCurrentlyAssignedDisplayNames().size()) {
-                dropdown.addItem("Unassigned");
-                currentAssignment = status.getCurrentlyAssignedDisplayNames().get(i);
-                dropdown.addItem(currentAssignment);
-                dropdown.setSelectedIndex(1);
-            } else {
-                dropdown.addItem("Unassigned");
+                scrollContent.add(row);
             }
-
-            // Add available names
-            for (String availableName : status.getAvailableDisplayNames()) {
-                if (!availableName.equals(currentAssignment)) {
-                    dropdown.addItem(availableName);
-                }
-            }
-
-            instancePanel.add(dropdown);
-            instanceDropdowns.add(dropdown);
-
-            scrollContent.add(instancePanel);
-            scrollContent.add(Box.createRigidArea(new Dimension(0, 5)));
         }
 
-        // Add vertical glue to push everything to the top
         scrollContent.add(Box.createVerticalGlue());
 
-        // Create a scroll pane for the content
         JScrollPane scrollPane = new JScrollPane(scrollContent);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -180,51 +151,17 @@ public class PremiumInstancePanel extends JPanel {
         scrollPane.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         scrollPane.getViewport().setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // Add the scroll pane to the center of the management panel
         managementPanel.add(scrollPane, BorderLayout.CENTER);
 
-        // Add bottom panel with changes remaining and update button
+        // Footer
         JPanel bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
 
-        JLabel changesLabel = new JLabel("Changes remaining (re-charges 1 per day): " + status.getChangesRemaining());
-        changesLabel.setForeground(config.lossAmountColor());
-        changesLabel.setToolTipText("Remaining updates. This limit recharges by 1 every day up to a max of 12.");
-        bottomPanel.add(changesLabel, BorderLayout.WEST);
+        JLabel footerLabel = new JLabel("Manage keys at flipvault.app/settings");
+        footerLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        bottomPanel.add(footerLabel, BorderLayout.WEST);
 
-        JButton updateButton = new JButton("Update");
-        // Disable the update button if no changes remaining
-        updateButton.setEnabled(status.getChangesRemaining() > 0);
-        // Add tooltip to explain why button is disabled when changes = 0
-        if (status.getChangesRemaining() <= 0) {
-            updateButton.setToolTipText("No changes remaining. Wait for daily recharge.");
-        }
-
-        updateButton.addActionListener(e -> {
-            this.showLoading();
-            Consumer<PremiumInstanceStatus> c = (s) -> {
-                SwingUtilities.invokeLater(() -> {  // Make sure UI updates happen on EDT
-                    if (s.getLoadingError() != null && !s.getLoadingError().isEmpty()) {
-                        this.showError(s.getLoadingError());
-                    } else {
-                        this.showManagementView(s);
-                        suggestionManager.setSuggestionNeeded(true);
-                    }
-                });
-            };
-            List<String> desiredAssignedDisplayNames = new ArrayList<>();
-            for (JComboBox<String> dropdown : instanceDropdowns) {
-                String selectedName = (String) dropdown.getSelectedItem();
-                if (selectedName != null && !selectedName.equals("Unassigned") && !desiredAssignedDisplayNames.contains(selectedName)) {
-                    desiredAssignedDisplayNames.add(selectedName);
-                }
-            }
-            apiRequestHandler.asyncUpdatePremiumInstances(c, desiredAssignedDisplayNames);
-        });
-        bottomPanel.add(updateButton, BorderLayout.EAST);
-
-        // Add the bottom panel to the south of the management panel
         managementPanel.add(bottomPanel, BorderLayout.SOUTH);
 
         cardLayout.show(cardPanel, "management");

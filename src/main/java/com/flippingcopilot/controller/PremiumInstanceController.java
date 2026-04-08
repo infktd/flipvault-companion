@@ -28,9 +28,9 @@ public class PremiumInstanceController {
             dialog.dispose();
         }
         dialog = new JDialog();
-        dialog.setTitle("Premium accounts management");
+        dialog.setTitle("FlipVault API Keys");
         dialog.setModal(false);
-        dialog.setSize(400, 300);
+        dialog.setSize(450, 300);
         dialog.setLocationRelativeTo(null);
 
         // Create the panel

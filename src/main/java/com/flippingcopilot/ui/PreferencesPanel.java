@@ -321,8 +321,8 @@ public class PreferencesPanel extends JPanel {
         JPanel premiumInstancesPanel = new JPanel();
         premiumInstancesPanel.setLayout(new BorderLayout());
         premiumInstancesPanel.setOpaque(false);
-        JLabel premiumInstancesLabel = new JLabel("Premium accounts:");
-        JButton manageButton = new JButton("manage");
+        JLabel premiumInstancesLabel = new JLabel("API Keys:");
+        JButton manageButton = new JButton("view");
         manageButton.addActionListener(e -> {
             premiumInstanceController.loadAndOpenPremiumInstanceDialog();
         });
