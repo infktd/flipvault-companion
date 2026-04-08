@@ -18,10 +18,22 @@ public class ProfitCalculator {
     private final static int MAX_PRICE_FOR_GE_TAX = 250000000;
     private final static int GE_TAX_CAP = 5000000;
     private final static double GE_TAX = 0.02;
+    private final static int GE_TAX_FREE_THRESHOLD = 50; // Items < 50 GP have 0 tax (rounds down to 0)
     private final static HashSet<Integer> GE_TAX_EXEMPT_ITEMS = new HashSet<>(
-            Arrays.asList(8011, 365, 2309, 882, 806, 1891, 8010, 1755, 28824, 2140, 2142, 8009, 5325, 1785, 2347, 347,
-                    884, 807, 28790, 379, 8008, 355, 2327, 558, 1733, 13190, 233, 351, 5341, 2552, 329, 8794, 5329,
-                    5343, 1735, 315, 952, 886, 808, 8013, 361, 8007, 5331));
+            Arrays.asList(
+                    // Low-level food
+                    233, 315, 329, 347, 351, 355, 361, 365, 379, 1891, 2140, 2142, 2309, 2327,
+                    // Low-level ammo + Mind rune
+                    558, 806, 807, 808, 882, 884, 886,
+                    // Tools
+                    952, 1733, 1735, 1755, 1785, 2347, 5325, 5329, 5331, 5341, 5343, 8794,
+                    // Teleport tablets
+                    8007, 8008, 8009, 8010, 8011, 8013, 28790, 28824,
+                    // Jewelry + potions
+                    2552, 3853,  // Ring of dueling(8), Games necklace(8)
+                    3008, 3010, 3012, 3014,  // Energy potions
+                    // Bonds
+                    13190));
 
     private final Client client;
     private final OfferManager offerManager;
@@ -44,11 +56,12 @@ public class ProfitCalculator {
         if (GE_TAX_EXEMPT_ITEMS.contains(itemId)) {
             return 0;
         }
-
+        if (price < GE_TAX_FREE_THRESHOLD) {
+            return 0; // 2% of <50 rounds down to 0
+        }
         if (price >= MAX_PRICE_FOR_GE_TAX) {
             return GE_TAX_CAP;
         }
-
         return (int)Math.floor(price * GE_TAX);
     }
 
