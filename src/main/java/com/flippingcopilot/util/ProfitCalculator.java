@@ -62,7 +62,7 @@ public class ProfitCalculator {
         if (price >= MAX_PRICE_FOR_GE_TAX) {
             return GE_TAX_CAP;
         }
-        return (int)Math.floor(price * GE_TAX);
+        return (int)((long)price * 2 / 100);
     }
 
     /**
