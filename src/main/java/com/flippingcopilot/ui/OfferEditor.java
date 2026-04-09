@@ -63,7 +63,7 @@ public class OfferEditor {
             showQuantity(suggestion.getQuantity());
         } else if (offerHandler.isSettingPrice()) {
             if (currentItemId != suggestion.getItemId()
-                    || !Objects.equals(suggestion.offerType(), offerHandler.getOfferType())) {
+                    || (!Objects.equals(suggestion.offerType(), offerHandler.getOfferType()) && !suggestion.isAbortSuggestion())) {
                 int price = offerManager.getViewedSlotItemPrice();
                 if (offerHandler.getViewedSlotPriceErrorText() != null && price <= 0) {
                     shiftChatboxWidgetsDown();

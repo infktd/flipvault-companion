@@ -52,7 +52,7 @@ public class OfferHandler {
 
             var suggestion = suggestionManager.getSuggestion();
             if (suggestion != null && suggestion.getItemId() == currentItemId &&
-                    Objects.equals(suggestion.offerType(), getOfferType())) {
+                    (Objects.equals(suggestion.offerType(), getOfferType()) || suggestion.isAbortSuggestion())) {
                 offerManager.setViewedSlotItemPrice(suggestion.getPrice());
                 offerManager.setLastViewedSlotItemId(suggestion.getItemId());
                 offerManager.setLastViewedSlotItemPrice(suggestion.getPrice());
@@ -190,7 +190,7 @@ public class OfferHandler {
         } else if (isSettingPrice()) {
             int price = -1;
             if (suggestion == null || currentItemId != suggestion.getItemId()
-                    || !Objects.equals(suggestion.offerType(), getOfferType())) {
+                    || (!Objects.equals(suggestion.offerType(), getOfferType()) && !suggestion.isAbortSuggestion())) {
                 if (offerManager.getViewedSlotItemId() != currentItemId) {
                     return;
                 }
