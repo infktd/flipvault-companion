@@ -56,7 +56,7 @@ public class StatusOfferList extends ArrayList<Offer> {
         return requiredSlots > numEmptySlots && completeOfferExists();
     }
 
-    public boolean completeOfferExists() {
+    boolean completeOfferExists() {
         return stream().anyMatch(offer -> offer.getStatus() != OfferStatus.EMPTY && !offer.isActive());
     }
 

@@ -183,10 +183,10 @@ public class SuggestionController {
             log.info("discarding dump suggestion as already processing dump suggestion");
             return;
         }
-        if (accountStatus.canFreeSlotForDump()) {
+        if (accountStatus.emptySlotExists()) {
             handleSuggestionReceived(suggestionManager.getSuggestion(), suggestion, accountStatus);
         } else {
-            log.info("discarding dump suggestion as no free or completable slot");
+            log.info("discarding dump suggestion as no free slot");
         }
     }
 
