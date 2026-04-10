@@ -152,7 +152,9 @@ public class Suggestion {
                     s.expectedDuration = (Double) MsgPackUtil.decodePrimitive(b);
                     break;
                 case "ep":
-                    s.expectedProfit = (Double) MsgPackUtil.decodePrimitive(b);
+                    Object epRaw = MsgPackUtil.decodePrimitive(b);
+                    if (epRaw instanceof Double) s.expectedProfit = (Double) epRaw;
+                    else if (epRaw instanceof Long) s.expectedProfit = ((Long) epRaw).doubleValue();
                     break;
                 case "gd":
                     s.graphData = Data.fromMsgPack(b);
