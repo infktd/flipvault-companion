@@ -472,7 +472,7 @@ public class SuggestionPanel extends JPanel {
         if(collectNeeded && !uncollectedManager.HasUncollected(osrsLoginManager.getAccountHash())) {
             log.warn("tick {} collect is suggested but there is nothing to collect! suggestion: {} {} {}", client.getTickCount(), suggestion.getType(), suggestion.getQuantity(), suggestion.getItemId());
         }
-        if (collectNeeded) {
+        if (collectNeeded && !suggestion.isDumpAlert()) {
             suggestCollect();
         } else if (suggestion.isWaitSuggestion() && !grandExchange.isOpen() && accountStatus.emptySlotExists()) {
             suggestOpenGe();

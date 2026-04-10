@@ -137,6 +137,11 @@ public class AccountStatus {
         return offers.emptySlotExists(isWorldMember || isAccountMember);
     }
 
+    /** True if a slot is free or a completed offer can be collected to free one. */
+    public synchronized boolean canFreeSlotForDump() {
+        return offers.emptySlotExists(isWorldMember || isAccountMember) || offers.completeOfferExists();
+    }
+
     private long getTotalGp() {
         return inventory.getTotalGp() + offers.getTotalGpToCollect();
     }
