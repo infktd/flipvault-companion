@@ -188,6 +188,9 @@ public class OfferHandler {
             }
             setChatboxValue(quantity);
         } else if (isSettingPrice()) {
+            if (offerManager.isUserChoosingPrice()) {
+                return; // user is entering their own re-price after skipping an abort
+            }
             int price = -1;
             if (suggestion == null || currentItemId != suggestion.getItemId()
                     || (!Objects.equals(suggestion.offerType(), getOfferType()) && !suggestion.isAbortSuggestion())) {

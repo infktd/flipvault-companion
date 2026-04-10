@@ -192,7 +192,7 @@ public class HighlightController {
 
         // Standard suggestion case
         if (offerTypeMatches && itemMatches) {
-            if (s.offerPrice != suggestion.getPrice()) {
+            if (s.offerPrice != suggestion.getPrice() && !offerManager.isUserChoosingPrice()) {
                 highlightPrice(blueHighlight);
             }
             highlightQuantity(suggestion, s.offerQuantity, blueHighlight);

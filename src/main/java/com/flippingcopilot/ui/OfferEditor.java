@@ -62,6 +62,10 @@ public class OfferEditor {
             // Show quantity text — OfferHandler.setSuggestedAction handles the actual cap
             showQuantity(suggestion.getQuantity());
         } else if (offerHandler.isSettingPrice()) {
+            if (offerManager.isUserChoosingPrice()) {
+                // User explicitly skipped an abort — leave price field blank so they can enter their own
+                return;
+            }
             if (currentItemId != suggestion.getItemId()
                     || (!Objects.equals(suggestion.offerType(), offerHandler.getOfferType()) && !suggestion.isAbortSuggestion())) {
                 int price = offerManager.getViewedSlotItemPrice();
