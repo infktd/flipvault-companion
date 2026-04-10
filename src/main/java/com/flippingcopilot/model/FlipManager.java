@@ -2,7 +2,6 @@ package com.flippingcopilot.model;
 
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.util.Constants;
-import com.flippingcopilot.util.ProfitCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +31,6 @@ public class FlipManager {
 
     public static final Comparator<FlipV2> FLIP_STATUS_TIME_COMPARATOR =
                 Comparator.comparing(FlipV2::isClosed).reversed().thenComparing(f -> f.getClosedTime() > 0 ? f.getClosedTime() : f.getOpenedTime());
-    public static final Comparator<FlipV2> TIME_DESC_COMPARATOR = Comparator.comparing(FlipV2::lastTransactionTime).reversed();
 
     // dependencies
     private final ItemController itemController;
@@ -42,7 +40,7 @@ public class FlipManager {
 
     // state
     @Setter
-    private volatile int fvUserId;
+    private volatile int copilotUserId;
     private Integer intervalAccount;
     private int intervalStartTime;
     private Stats intervalStats = new Stats();
@@ -50,10 +48,6 @@ public class FlipManager {
     final Map<Integer, Map<Integer, FlipV2>> lastOpenFlipByItemId = new HashMap<>();
     final Map<UUID, Integer> existingCloseTimes = new HashMap<>();
     final List<WeekAggregate> weeks = new ArrayList<>(365*5);
-
-    // Local buy tracker: displayName -> itemId -> [totalSpent, totalQuantity]
-    // Used for session profit estimation when server-side account data is unavailable.
-    private final Map<String, Map<Integer, long[]>> localBuyTracker = new HashMap<>();
 
 
     public synchronized Integer getIntervalAccount() {
@@ -85,8 +79,8 @@ public class FlipManager {
     }
 
 
-    public synchronized boolean mergeFlips(List<FlipV2> flips, int fvUserId) {
-        if (fvUserId != this.fvUserId) {
+    public synchronized boolean mergeFlips(List<FlipV2> flips, int copilotUserId) {
+        if (copilotUserId != this.copilotUserId) {
             return false;
         }
         flips.sort(FLIP_STATUS_TIME_COMPARATOR);
@@ -173,7 +167,10 @@ public class FlipManager {
         if(includeBuyingFlips) {
             WeekAggregate w = getOrInitWeek(0);
             List<FlipV2> f = accountId == null ? w.flipsAfter(-1, false) : w.flipsAfterForAccount(-1, accountId);
-            f.stream().filter(i -> i.getOpenedTime() > intervalStartTime).forEach(c);
+            f.stream()
+                    .filter(i -> i.getOpenedTime() > intervalStartTime)
+                    .filter(this::isTrackedFlip)
+                    .forEach(c);
         }
         WeekAggregate intervalWeek = getOrInitWeek(intervalStartTime);
         for(int i=weeks.size()-1; i >= intervalWeek.pos; i--) {
@@ -186,7 +183,9 @@ public class FlipManager {
             // note: weekFlips are ascending order but we consume in descending order
             for(int ii=n-1; ii >= 0; ii--) {
                 FlipV2 f = weekFlips.get(ii);
-                c.accept(f);
+                if (isTrackedFlip(f)) {
+                    c.accept(f);
+                }
             }
         }
     }
@@ -206,16 +205,16 @@ public class FlipManager {
             WeekAggregate w = weeks.get(i);
             List<FlipV2> weekFlips = accountId == null ? w.flipsAfter(intervalStartTime, true) : w.flipsAfterForAccount(intervalStartTime, accountId);
             int n = weekFlips.size();
-            if (n > toSkip) {
-                // note: weekFlips are ascending order but we return pages of descending order
-                int end = n - toSkip;
-                int start = Math.max(0, end - (pageSize - pageFlips.size()));
-                for(int ii=end-1; ii >= start; ii--) {
-                    pageFlips.add(weekFlips.get(ii));
+            for(int ii=n-1; ii >= 0 && pageFlips.size() < pageSize; ii--) {
+                FlipV2 flip = weekFlips.get(ii);
+                if (!isTrackedFlip(flip)) {
+                    continue;
                 }
-                toSkip = 0;
-            } else {
-                toSkip -= n;
+                if (toSkip > 0) {
+                    toSkip -= 1;
+                    continue;
+                }
+                pageFlips.add(flip);
             }
         }
         if (itemController != null) {
@@ -224,64 +223,14 @@ public class FlipManager {
         return pageFlips;
     }
 
-    public synchronized long getLocalBuyQuantity(String displayName, int itemId) {
-        Map<Integer, long[]> itemMap = localBuyTracker.get(displayName);
-        if (itemMap == null) return 0;
-        long[] buy = itemMap.get(itemId);
-        if (buy == null) return 0;
-        return buy[1];
-    }
-
-    public synchronized Long getLocalAvgBuyPrice(String displayName, int itemId) {
-        Map<Integer, long[]> itemMap = localBuyTracker.get(displayName);
-        if (itemMap == null) return null;
-        long[] buy = itemMap.get(itemId);
-        if (buy == null || buy[1] <= 0) return null;
-        return buy[0] / buy[1];
-    }
-
-    public synchronized void trackLocalBuy(String displayName, int itemId, long amountSpent, int quantity) {
-        long[] buy = localBuyTracker
-                .computeIfAbsent(displayName, k -> new HashMap<>())
-                .computeIfAbsent(itemId, k -> new long[]{0, 0});
-        buy[0] += amountSpent;
-        buy[1] += quantity;
-        log.debug("local buy tracked: {} x item {}, spent {}, running total qty={}", quantity, itemId, amountSpent, buy[1]);
-    }
-
-    public synchronized Long estimateLocalProfit(String displayName, Transaction t) {
-        if (!OfferStatus.SELL.equals(t.getType())) return null;
-        Map<Integer, long[]> itemMap = localBuyTracker.get(displayName);
-        if (itemMap == null) return null;
-        long[] buy = itemMap.get(t.getItemId());
-        if (buy == null || buy[1] <= 0) return null;
-
-        long sellQty = t.getQuantity();
-        long proportionalBuyCost = (buy[0] * sellQty) / buy[1];
-        int grossSellPricePerUnit = (int) (t.getAmountSpent() / sellQty);
-        int postTaxSellPrice = ProfitCalculator.getPostTaxPrice(t.getItemId(), grossSellPricePerUnit);
-        long profit = (long) postTaxSellPrice * sellQty - proportionalBuyCost;
-
-        // Consume the matched buy quantity
-        buy[0] -= proportionalBuyCost;
-        buy[1] -= sellQty;
-        if (buy[1] <= 0) {
-            itemMap.remove(t.getItemId());
-        }
-
-        log.debug("local profit estimate for item {}: {} gp (qty={})", t.getItemId(), profit, sellQty);
-        return profit;
-    }
-
     public synchronized void reset() {
         intervalAccount = null;
         intervalStartTime = 0;
-        fvUserId = 0;
+        copilotUserId = 0;
         intervalStats = new Stats();
         lastOpenFlipByItemId.clear();
         existingCloseTimes.clear();
         weeks.clear();
-        localBuyTracker.clear();
     }
 
     private void mergeFlip_(FlipV2 flip) {
@@ -446,5 +395,13 @@ public class FlipManager {
                 return mid; // key found
         }
         return -(low + 1);  // key not found (low = insertion point)
+    }
+
+    private boolean isTrackedFlip(FlipV2 flip) {
+        if (flip == null) {
+            return false;
+        }
+        int portfolioId = flip.getPortfolioId();
+        return portfolioId != -2 && portfolioId != -3;
     }
 }

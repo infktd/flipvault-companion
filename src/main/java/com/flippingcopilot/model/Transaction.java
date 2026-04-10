@@ -22,10 +22,10 @@ public class Transaction {
     private int price;
     private int quantity;
     private int boxId;
-    private int amountSpent;
+    private long amountSpent;
     private Instant timestamp;
-    private boolean fvPriceUsed;
-    private boolean wasFvSuggestion;
+    private boolean copilotPriceUsed;
+    private boolean wasCopilotSuggestion;
     private int offerTotalQuantity;
     private boolean login;
     private boolean consistent;
@@ -49,8 +49,8 @@ public class Transaction {
         jsonObject.addProperty("box_id", boxId);
         jsonObject.addProperty("amount_spent", amountSpent);
         jsonObject.addProperty("time", timestamp.getEpochSecond());
-        jsonObject.addProperty("copilot_price_used", fvPriceUsed);
-        jsonObject.addProperty("was_copilot_suggestion", wasFvSuggestion);
+        jsonObject.addProperty("copilot_price_used", copilotPriceUsed);
+        jsonObject.addProperty("was_copilot_suggestion", wasCopilotSuggestion);
         jsonObject.addProperty("consistent_previous_offer", consistent);
         jsonObject.addProperty("login", login);
         return jsonObject;
@@ -61,5 +61,4 @@ public class Transaction {
         return String.format("%s %d %d on slot %d", type, quantity, itemId, boxId);
     }
 }
-
 

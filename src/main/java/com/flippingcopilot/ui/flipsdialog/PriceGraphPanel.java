@@ -1,7 +1,7 @@
 package com.flippingcopilot.ui.flipsdialog;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.manager.PriceGraphConfigManager;
 import com.flippingcopilot.model.ItemPrice;
@@ -60,7 +60,7 @@ public class PriceGraphPanel extends JPanel {
 
     public PriceGraphPanel(ItemController itemController,
                            PriceGraphConfigManager configManager,
-                           FlipVaultConfig fvConfig,
+                           FlippingCopilotConfig copilotConfig,
                            ApiRequestHandler apiRequestHandler,
                            OsrsLoginManager osrsLoginManager, PriceGraphConfigManager priceGraphConfigManager, SuggestionManager suggestionManager) {
         this.itemController = itemController;
@@ -130,7 +130,7 @@ public class PriceGraphPanel extends JPanel {
         add(topPanel, BorderLayout.NORTH);
 
         graphPanel = new GraphPanel(configManager);
-        statsPanel = new StatsPanel(configManager, fvConfig);
+        statsPanel = new StatsPanel(configManager, copilotConfig);
         statsPanel.setBackground(configManager.getConfig().backgroundColor);
         statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -183,7 +183,7 @@ public class PriceGraphPanel extends JPanel {
                 }
             });
         };
-        apiRequestHandler.asyncGetItemPriceWithGraphData(itemId, "FlipVault", consumer, true);
+        apiRequestHandler.asyncGetItemPriceWithGraphData(itemId, "FlipCopilot", consumer, true);
     }
 
     public void setLoadingCard() {

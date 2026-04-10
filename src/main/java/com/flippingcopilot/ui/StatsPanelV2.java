@@ -1,9 +1,9 @@
 package com.flippingcopilot.ui;
 
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.controller.*;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import com.flippingcopilot.ui.components.AccountDropdown;
 import com.flippingcopilot.ui.components.IntervalDropdown;
 import com.flippingcopilot.ui.flipsdialog.FlipsDialogController;
@@ -40,12 +40,12 @@ public class StatsPanelV2 extends JPanel {
     public final Icon HIGHLIGHTED_FLIPS_DIALOG = new ImageIcon(ImageUtil.luminanceScale(FLIPS_DIALOG_ICON, BUTTON_HOVER_LUMINANCE));
 
 
-    private static final java.util.List<Integer> SESSION_STATS_INDS = Arrays.asList(3,4,5,6);
+    private static final java.util.List<Integer> SESSION_STATS_INDS = Arrays.asList(3,4,5);
 
     // dependencies
-    private final FVLoginRS fvLoginRS;
+    private final CopilotLoginRS copilotLoginRS;
     private final OsrsLoginManager osrsLoginManager;
-    private final FlipVaultConfig config;
+    private final FlippingCopilotConfig config;
     private final FlipManager flipManager;
     private final SessionManager sessionManager;
     private final WebHookController webHookController;
@@ -66,7 +66,6 @@ public class StatsPanelV2 extends JPanel {
     private final JLabel sessionTimeVal = new JLabel("00:00:00");
     private final JLabel hourlyProfitVal = new JLabel("0 gp/hr");
     private final JLabel avgCashVal = new JLabel("0 gp");
-    private final JLabel sessionProfitVal = new JLabel("0 gp");
     private final Paginator paginator;
     private final JButton flipsDialogButton = new JButton();
 
@@ -74,16 +73,16 @@ public class StatsPanelV2 extends JPanel {
 
     // Modified constructor
     @Inject
-    public StatsPanelV2(FVLoginRS fvLoginRS,
+    public StatsPanelV2(CopilotLoginRS copilotLoginRS,
                         OsrsLoginManager osrsLoginManager,
-                        FlipVaultConfig config,
+                        FlippingCopilotConfig config,
                         FlipManager FlipManager,
                         SessionManager sessionManager,
                         WebHookController webHookController,
                         ClientThread clientThread,
                         FlipsDialogController flipsDialogController,
                         GeHistoryTransactionButton geHistoryTransactionButton) { // Added parameter
-        this.fvLoginRS = fvLoginRS;
+        this.copilotLoginRS = copilotLoginRS;
         this.osrsLoginManager = osrsLoginManager;
         this.sessionManager = sessionManager;
         this.webHookController = webHookController;
@@ -119,7 +118,7 @@ public class StatsPanelV2 extends JPanel {
 
         JPanel intervalRsAccountDropdownWrapper = new JPanel(new BorderLayout(0, 0));
         accountDropdown = new AccountDropdown(
-                () -> fvLoginRS.get().displayNameToAccountId,
+                () -> copilotLoginRS.get().displayNameToAccountId,
                 flipManager::setIntervalAccount,
                 AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION
         );
@@ -149,8 +148,7 @@ public class StatsPanelV2 extends JPanel {
 
         add(bottomPanel, BorderLayout.SOUTH);
 
-        flipManager.setFlipsChangedCallback(() -> refresh(true, fvLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState()));
-        sessionManager.setProfitUpdatedCallback(() -> refresh(false, fvLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState()));
+        flipManager.setFlipsChangedCallback(() -> refresh(true, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState()));
     }
 
     private void setupFlipsDialogButton() {
@@ -165,7 +163,8 @@ public class StatsPanelV2 extends JPanel {
         flipsDialogButton.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                flipsDialogController.showFlipsTab();
+                log.debug("opening flips dialog");
+                flipsDialogController.showPortfolioTab();
             }
             @Override
             public void mouseEntered(MouseEvent e) {
@@ -190,7 +189,7 @@ public class StatsPanelV2 extends JPanel {
                 clientThread.invoke(() -> {
                     if (osrsLoginManager.isValidLoginState()) {
                         String displayName = osrsLoginManager.getPlayerDisplayName();
-                        Integer accountId = fvLoginRS.get().getAccountId(displayName);
+                        Integer accountId = copilotLoginRS.get().getAccountId(displayName);
                         if(accountId != null && accountId != -1) {
                             webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, true);
                             sessionManager.resetSession();
@@ -198,7 +197,7 @@ public class StatsPanelV2 extends JPanel {
                                 flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
                             }
                         }
-                        refresh(true, fvLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
+                        refresh(true, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
                     }
                 });
             }
@@ -238,7 +237,6 @@ public class StatsPanelV2 extends JPanel {
         subInfoPanel.add(buildSubInfoPanelItem("Session time:", sessionTimeVal, ColorScheme.GRAND_EXCHANGE_ALCH));
         subInfoPanel.add(buildSubInfoPanelItem("Hourly profit:", hourlyProfitVal, Color.WHITE));
         subInfoPanel.add(buildSubInfoPanelItem("Avg wealth:", avgCashVal, ColorScheme.LIGHT_GRAY_COLOR));
-        subInfoPanel.add(buildSubInfoPanelItem("Session profit:", sessionProfitVal, Color.WHITE));
         subInfoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         subInfoPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0,0,1,0, ColorScheme.DARK_GRAY_COLOR),
                 new EmptyBorder(2, 5, 5, 5)));
@@ -347,7 +345,6 @@ public class StatsPanelV2 extends JPanel {
             sessionTimeVal.setText("00:00:00");
             hourlyProfitVal.setText("0 gp/hr");
             avgCashVal.setText("0 gp");
-            sessionProfitVal.setText("0 gp");
             flipsPanel.removeAll();
             paginator.setTotalPages(1);
             boolean v = IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit());
@@ -377,25 +374,19 @@ public class StatsPanelV2 extends JPanel {
             log.debug("populating flips took {}ms", (System.nanoTime() - s) / 1000_000);
         }
 
-        // 'Session time', 'Hourly profit', 'Avg wealth' and 'Session profit' only shown for Session interval
-        boolean isSession = IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit());
-        if (isSession) {
+        // 'Session time', 'Hourly profit' and 'Avg wealth' should only be set if 'Session' is select in the dropdown
+        if (IntervalTimeUnit.SESSION.equals(intervalDropdown.getSelectedIntervalTimeUnit())) {
             SESSION_STATS_INDS.forEach(i -> subInfoPanel.getComponent(i).setVisible(true));
             long seconds = sd.durationMillis / 1000;
             float hoursFloat = (((float) seconds) / 3600.0f);
-            // Use session profit for hourly rate (falls back to FlipV2 stats if local is 0)
-            long profitForRate = sd.sessionProfit != 0 ? sd.sessionProfit : stats.profit;
-            long hourlyProfit = hoursFloat == 0 ? 0 : (long) (profitForRate / hoursFloat);
+            long hourlyProfit = hoursFloat == 0 ? 0 : (long) (stats.profit / hoursFloat);
             String sessionTime = String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60);
             sessionTimeVal.setText(sessionTime);
             hourlyProfitVal.setText(UIUtilities.formatProfitWithoutGp(hourlyProfit) + " gp/hr");
             hourlyProfitVal.setForeground(UIUtilities.getProfitColor(hourlyProfit, config));
             avgCashVal.setText(UIUtilities.quantityToRSDecimalStack(Math.abs(sd.averageCash), false) + " gp");
-            sessionProfitVal.setText(UIUtilities.formatProfit(sd.sessionProfit));
-            sessionProfitVal.setForeground(UIUtilities.getProfitColor(sd.sessionProfit, config));
         } else {
             SESSION_STATS_INDS.forEach(i -> subInfoPanel.getComponent(i).setVisible(false));
         }
-
     }
 }

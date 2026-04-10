@@ -59,11 +59,10 @@ public class OfferEditor {
             }
 
             shiftChatboxWidgetsDown();
-            // Show quantity text — OfferHandler.setSuggestedAction handles the actual cap
             showQuantity(suggestion.getQuantity());
         } else if (offerHandler.isSettingPrice()) {
             if (currentItemId != suggestion.getItemId()
-                    || (!Objects.equals(suggestion.offerType(), offerHandler.getOfferType()) && !suggestion.isAbortSuggestion())) {
+                    || !Objects.equals(suggestion.offerType(), offerHandler.getOfferType())) {
                 int price = offerManager.getViewedSlotItemPrice();
                 if (offerHandler.getViewedSlotPriceErrorText() != null && price <= 0) {
                     shiftChatboxWidgetsDown();
@@ -87,7 +86,7 @@ public class OfferEditor {
     }
 
     private void showQuantity(int quantity) {
-        text.setText("set to FlipVault quantity: " + quantity);
+        text.setText("set to Copilot quantity: " + quantity);
         text.setAction(1, "Set quantity");
         setHoverListeners(text);
         text.setOnOpListener((JavaScriptCallback) ev ->
@@ -97,7 +96,7 @@ public class OfferEditor {
     }
 
     public void showPrice(int price) {
-        text.setText("set to FlipVault price: " + String.format("%,d", price) + " gp");
+        text.setText("set to Copilot price: " + String.format("%,d", price) + " gp");
         text.setAction(0, "Set price");
         setHoverListeners(text);
         text.setOnOpListener((JavaScriptCallback) ev ->
@@ -107,7 +106,7 @@ public class OfferEditor {
     }
 
     private void showPriceWithWarning(int price, String warning) {
-        text.setText("set to FlipVault price: " + String.format("%,d", price) + " gp. " + warning);
+        text.setText("set to Copilot price: " + String.format("%,d", price) + " gp. " + warning);
         text.setAction(0, "Set price");
         setHoverListeners(text);
         text.setOnOpListener((JavaScriptCallback) ev ->

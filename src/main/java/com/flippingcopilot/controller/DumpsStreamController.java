@@ -35,21 +35,21 @@ public class DumpsStreamController {
                                  SuggestionController suggestionController,
                                  AccountSuggestionPreferencesRS accountSuggestionPreferencesRS,
                                  OsrsLoginRS osrsLoginRS,
-                                 FVLoginRS fvLoginRS,
+                                 CopilotLoginRS copilotLoginRS,
                                  GrandExchangeOpenRS grandExchangeOpenRS) {
         this.clientThread = clientThread;
         this.apiRequestHandler = apiRequestHandler;
         this.suggestionController = suggestionController;
         this.subscribedDisplayName = ReactiveStateUtil.derive(
-                fvLoginRS,
+                copilotLoginRS,
                 osrsLoginRS,
                 accountSuggestionPreferencesRS,
                 grandExchangeOpenRS,
-                (fvLoginState, loginState, preferences, isGrandExchangeOpen) -> {
+                (copilotLoginState, loginState, preferences, isGrandExchangeOpen) -> {
                     if (!loginState.loggedIn
                             || loginState.displayName == null
                             || loginState.displayName.isBlank()
-                            || !fvLoginState.isLoggedIn()
+                            || !copilotLoginState.isLoggedIn()
                             || !preferences.isReceiveDumpSuggestions()
                             || !Boolean.TRUE.equals(isGrandExchangeOpen)) {
                         return null;

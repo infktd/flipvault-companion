@@ -1,15 +1,18 @@
 package com.flippingcopilot.ui.flipsdialog;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.manager.PriceGraphConfigManager;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import com.flippingcopilot.rs.OsrsLoginRS;
+import com.flippingcopilot.rs.BankStateRS;
+import com.flippingcopilot.rs.PortfolioStateRS;
 import com.flippingcopilot.ui.graph.model.PriceLine;
 import com.google.inject.name.Named;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 
 import javax.inject.Inject;
@@ -27,13 +30,16 @@ public class FlipsDialogController {
     private final FlipManager flipsManager;
     private final ExecutorService executorService;
     private final SessionManager sessionManager;
-    private final FVLoginRS fvLoginRS;
-    private final FlipVaultConfig config;
+    private final CopilotLoginRS copilotLoginRS;
+    private final FlippingCopilotConfig config;
     private final ApiRequestHandler apiRequestHandler;
     private final PriceGraphConfigManager priceGraphConfigManager;
     private final OsrsLoginManager osrsLoginManager;
     private final SuggestionManager suggestionManager;
     private final OsrsLoginRS osrsLoginRS;
+    private final PortfolioStateRS portfolioStateRS;
+    private final BankStateRS bankStateRS;
+    private final ClientThread clientThread;
 
     public PriceGraphPanel priceGraphPanel;
     private JTabbedPane tabbedPane;
@@ -46,21 +52,30 @@ public class FlipsDialogController {
             ItemController itemController,
             FlipManager flipsManager,
             SessionManager sessionManager,
-            FVLoginRS fvLoginRS,
-            FlipVaultConfig config,
+            CopilotLoginRS copilotLoginRS,
+            FlippingCopilotConfig config,
             ApiRequestHandler apiRequestHandler,
-            PriceGraphConfigManager priceGraphConfigManager, OsrsLoginManager osrsLoginManager, SuggestionManager suggestionManager, OsrsLoginRS osrsLoginRS) {
+            PriceGraphConfigManager priceGraphConfigManager,
+            OsrsLoginManager osrsLoginManager,
+            SuggestionManager suggestionManager,
+            OsrsLoginRS osrsLoginRS,
+            PortfolioStateRS portfolioStateRS,
+            BankStateRS bankStateRS,
+            ClientThread clientThread) {
         this.itemController = itemController;
         this.flipsManager = flipsManager;
         this.executorService = executorService;
         this.sessionManager = sessionManager;
-        this.fvLoginRS = fvLoginRS;
+        this.copilotLoginRS = copilotLoginRS;
         this.config = config;
         this.apiRequestHandler = apiRequestHandler;
         this.priceGraphConfigManager = priceGraphConfigManager;
         this.osrsLoginManager = osrsLoginManager;
         this.suggestionManager = suggestionManager;
         this.osrsLoginRS = osrsLoginRS;
+        this.portfolioStateRS = portfolioStateRS;
+        this.bankStateRS = bankStateRS;
+        this.clientThread = clientThread;
     }
 
     public void initDialog(Window windowAncestor) {
@@ -74,19 +89,30 @@ public class FlipsDialogController {
                     config,
                     apiRequestHandler
             );
-            flipsPanel = new FlipsPanel(osrsLoginRS, flipsManager, itemController, fvLoginRS,
+            flipsPanel = new FlipsPanel(osrsLoginRS, flipsManager, itemController, copilotLoginRS,
                     executorService, config, apiRequestHandler, (f) -> {
                 visualizeFlipPanel.showFlipVisualization(f);
-                tabbedPane.setSelectedIndex(6);
+                tabbedPane.setSelectedIndex(7);
             });
             ItemAggregatePanel itemsPanel = new ItemAggregatePanel(flipsManager, itemController,
-                    fvLoginRS, executorService, config);
-            AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(flipsManager, fvLoginRS,
+                    copilotLoginRS, executorService, config);
+            AccountsAggregatePanel accountsPanel = new AccountsAggregatePanel(flipsManager, copilotLoginRS,
                     executorService, config, apiRequestHandler, flipsManager);
             ProfitPanel profitPanel = new ProfitPanel(flipsManager, executorService, sessionManager,
-                    fvLoginRS, config);
-            TransactionsPanel transactionsPanel = new TransactionsPanel(fvLoginRS, itemController,
-                    executorService, apiRequestHandler, config, flipsManager);
+                    copilotLoginRS, config);
+            PortfolioPanel portfolioPanel = new PortfolioPanel(
+                    itemController,
+                    config,
+                    apiRequestHandler,
+                    suggestionManager,
+                    copilotLoginRS,
+                    osrsLoginRS,
+                    portfolioStateRS,
+                    bankStateRS,
+                    clientThread
+            );
+            TransactionsPanel transactionsPanel = new TransactionsPanel(copilotLoginRS, itemController,
+                    executorService, apiRequestHandler, osrsLoginManager, config, flipsManager);
             priceGraphPanel = new PriceGraphPanel(
                     itemController,
                     priceGraphConfigManager,
@@ -96,6 +122,7 @@ public class FlipsDialogController {
                     priceGraphConfigManager,
                     suggestionManager
             );
+            tabbedPane.addTab("Portfolio", portfolioPanel);
             tabbedPane.addTab("Flips", flipsPanel);
             tabbedPane.addTab("Items", itemsPanel);
             tabbedPane.addTab("Accounts", accountsPanel);
@@ -106,7 +133,7 @@ public class FlipsDialogController {
 
 
             JDialog dialog = new JDialog(windowAncestor);
-            dialog.setTitle("FlipVault");
+            dialog.setTitle("Flipping Copilot");
             dialog.setResizable(true);
             dialog.setMinimumSize(new Dimension(800, 600));
 
@@ -115,20 +142,24 @@ public class FlipsDialogController {
                 int selectedIndex = tabbedPane.getSelectedIndex();
                 switch (selectedIndex) {
                     case 0:
-                        flipsPanel.onTabShown();
+                        portfolioPanel.onTabShown();
                         break;
                     case 1:
-                        itemsPanel.onTabShown();
+                        flipsPanel.onTabShown();
                         break;
                     case 2:
-                        accountsPanel.onTabShown();
+                        itemsPanel.onTabShown();
                         break;
                     case 3:
-                        profitPanel.refreshGraph(true);
+                        accountsPanel.onTabShown();
+                        break;
                     case 4:
-                        transactionsPanel.loadTransactionsIfNeeded();
+                        profitPanel.refreshGraph(true);
                         break;
                     case 5:
+                        transactionsPanel.loadTransactionsIfNeeded();
+                        break;
+                    case 6:
                         priceGraphPanel.onTabShown();
                         break;
                 }
@@ -148,7 +179,7 @@ public class FlipsDialogController {
     }
 
     public void showPriceGraphTab(Integer openOnPriceGraphItemId, boolean suggestionPriceGraph, PriceLine priceLine) {
-        tabbedPane.setSelectedIndex(5);
+        tabbedPane.setSelectedIndex(6);
         if(openOnPriceGraphItemId != null) {
             priceGraphPanel.isShowingSuggestionPriceData = false;
             priceGraphPanel.searchBox.setItem(new ItemIdName(openOnPriceGraphItemId, itemController.getItemName(openOnPriceGraphItemId)));
@@ -163,8 +194,13 @@ public class FlipsDialogController {
 
 
     public void showFlipsTab() {
-        tabbedPane.setSelectedIndex(0);
+        tabbedPane.setSelectedIndex(1);
         dialog.setVisible(true);
         flipsPanel.onTabShown();
+    }
+
+    public void showPortfolioTab() {
+        tabbedPane.setSelectedIndex(0);
+        dialog.setVisible(true);
     }
 }

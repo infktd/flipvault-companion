@@ -1,6 +1,7 @@
 package com.flippingcopilot.controller;
 
 import com.flippingcopilot.model.Suggestion;
+import com.flippingcopilot.model.SuggestionType;
 import com.flippingcopilot.model.SuggestionPreferencesManager;
 import com.flippingcopilot.model.SuggestionManager;
 import com.flippingcopilot.model.AccountStatus;
@@ -37,7 +38,7 @@ public class GePreviousSearch {
         }
 
         if (isScanningForDumpsSuggested(suggestion)) {
-            if ((grandExchange.isPreviousSearchSet() || fvPreviousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
+            if ((grandExchange.isPreviousSearchSet() || copilotPreviousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
                 setScanningForDumpsMessage();
             } else {
                 createPreviousSearchWidget(-1, "");
@@ -50,8 +51,8 @@ public class GePreviousSearch {
             return;
         }
 
-        if ("buy".equals(suggestion.getType())) {
-            if ((grandExchange.isPreviousSearchSet() || fvPreviousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
+        if (suggestion.getType() == SuggestionType.BUY) {
+            if ((grandExchange.isPreviousSearchSet() || copilotPreviousSearchItemExists()) && grandExchange.showLastSearchEnabled()) {
                 setPreviousSearch(suggestion.getItemId(), suggestion.getName());
             } else {
                 createPreviousSearchWidget(suggestion.getItemId(), suggestion.getName());
@@ -73,7 +74,7 @@ public class GePreviousSearch {
                 && suggestionPreferencesManager.isReceiveDumpSuggestions();
     }
 
-    private boolean fvPreviousSearchItemExists() {
+    private boolean copilotPreviousSearchItemExists() {
         Widget searchResults = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
         if(searchResults == null || searchResults.getChildren() == null || searchResults.getChildren().length < 2) {
             return false;
@@ -87,7 +88,7 @@ public class GePreviousSearch {
             if (text == null) {
                 continue;
             }
-            if(text.startsWith("FlipVault item:") || text.startsWith("Scanning for dumps...")) {
+            if(text.startsWith("Copilot item:") || text.startsWith("Scanning for dumps...")) {
                 return true;
             }
         }
@@ -105,7 +106,7 @@ public class GePreviousSearch {
         previousSearch.revalidate();
 
         Widget previousSearchText = searchResults.getChild(1);
-        previousSearchText.setText("FlipVault item:");
+        previousSearchText.setText("Copilot item:");
         previousSearchText.setOriginalWidth(95);
         previousSearchText.setXTextAlignment(WidgetTextAlignment.LEFT);
         previousSearchText.revalidate();
@@ -185,7 +186,7 @@ public class GePreviousSearch {
     private void createPreviousSearchTextWidget() {
         Widget parentWidget = client.getWidget(ComponentID.CHATBOX_GE_SEARCH_RESULTS);
         Widget widget = parentWidget.createChild(1, WidgetType.TEXT);
-        widget.setText("FlipVault item:");
+        widget.setText("Copilot item:");
         widget.setFontId(495);
         widget.setOriginalX(114);
         widget.setOriginalY(0);

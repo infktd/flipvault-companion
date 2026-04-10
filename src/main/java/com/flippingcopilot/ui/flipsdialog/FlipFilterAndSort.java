@@ -2,10 +2,11 @@ package com.flippingcopilot.ui.flipsdialog;
 
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.model.FlipManager;
+import com.flippingcopilot.model.FlipStatus;
 import com.flippingcopilot.model.FlipV2;
 import com.flippingcopilot.model.IntervalTimeUnit;
 import com.flippingcopilot.model.SortDirection;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import joptsimple.internal.Strings;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -50,21 +51,21 @@ public class FlipFilterAndSort {
     private final Consumer<Integer> totalPagesChangedCallback;
     private final Consumer<Boolean> slowLoadingCallback;
     private final ExecutorService executorService;
-    private final FVLoginRS fvLoginRS;
+    private final CopilotLoginRS copilotLoginRS;
     private final ItemController itemController;
 
     // state
     private List<FlipV2> cachedFlips = new ArrayList<>();
     private Integer cachedAccountId = null;
     private int cachedIntervalStartTime = Integer.MIN_VALUE;
-    private boolean cachedIncludeBuyingFlips = true;
+    private EnumSet<FlipStatus> cachedIncludedStatuses = EnumSet.allOf(FlipStatus.class);
     private Set<Integer> cachedFilteredItems = new HashSet<>();
     private SortDirection cachedSortDirection = SortDirection.DESC;
     private String cachedSortColumn = "";
 
     private int intervalStartTime = 1;
     private Integer accountId = null;
-    private boolean includeBuyingFlips = true;
+    private EnumSet<FlipStatus> includedStatuses = EnumSet.allOf(FlipStatus.class);
     @Getter
     private String sortColumn = "Last sell time";
     @Getter
@@ -80,20 +81,37 @@ public class FlipFilterAndSort {
                              Consumer<Integer> totalPagesChangedCallback,
                              Consumer<Boolean> slowLoadingCallback,
                              @Named("copilotExecutor") ExecutorService executorService,
-                             FVLoginRS fvLoginRS, ItemController itemController) {
+                             CopilotLoginRS copilotLoginRS, ItemController itemController) {
         this.flipManager = flipManager;
 
         this.flipsCallback = flipsCallback;
         this.totalPagesChangedCallback = totalPagesChangedCallback;
         this.slowLoadingCallback = slowLoadingCallback;
         this.executorService = executorService;
-        this.fvLoginRS = fvLoginRS;
+        this.copilotLoginRS = copilotLoginRS;
         this.itemController = itemController;
     }
 
     public synchronized void setIncludeBuyingFlips(boolean b) {
-        includeBuyingFlips = b;
-        reloadFlips(true, false);
+        if (b) {
+            setIncludedStatuses(EnumSet.allOf(FlipStatus.class));
+            return;
+        }
+        setIncludedStatuses(EnumSet.of(FlipStatus.FINISHED, FlipStatus.SELLING));
+    }
+
+    public synchronized void setIncludedStatuses(Set<FlipStatus> statuses) {
+        EnumSet<FlipStatus> resolved = statuses == null || statuses.isEmpty()
+                ? EnumSet.noneOf(FlipStatus.class)
+                : EnumSet.copyOf(statuses);
+        if (!Objects.equals(includedStatuses, resolved)) {
+            includedStatuses = resolved;
+            reloadFlips(true, false);
+        }
+    }
+
+    public synchronized Set<FlipStatus> getIncludedStatuses() {
+        return EnumSet.copyOf(includedStatuses);
     }
 
     public synchronized void setInterval(IntervalTimeUnit timeUnit, Integer value) {
@@ -170,7 +188,10 @@ public class FlipFilterAndSort {
                 flipsCallback.accept(flipManager.getPageFlips(page, pageSize, intervalStartTime, accountId));
             } else {
                 slowLoadingCallback.accept(true);
-                boolean cachedFlipsOutOfDate = !Objects.equals(cachedAccountId, accountId) || !cachedFilteredItems.equals(filteredItems) || cachedIntervalStartTime != intervalStartTime || cachedIncludeBuyingFlips != includeBuyingFlips;
+                boolean cachedFlipsOutOfDate = !Objects.equals(cachedAccountId, accountId)
+                        || !cachedFilteredItems.equals(filteredItems)
+                        || cachedIntervalStartTime != intervalStartTime
+                        || !cachedIncludedStatuses.equals(includedStatuses);
                 boolean cachedSortOutOfDate = cachedFlipsOutOfDate || !cachedSortColumn.equals(sortColumn) || !cachedSortDirection.equals(sortDirection);
                 log.debug("cachedFlipsOutOfDate={}, cachedSortOutOfDate={}", cachedFlipsOutOfDate, cachedSortOutOfDate);
                 if (cachedFlipsOutOfDate || forceReload) {
@@ -179,11 +200,14 @@ public class FlipFilterAndSort {
                     cachedFilteredItems.clear();
                     cachedFilteredItems.addAll(filteredItems);
                     cachedIntervalStartTime = intervalStartTime;
-                    cachedIncludeBuyingFlips = includeBuyingFlips;
+                    cachedIncludedStatuses = includedStatuses.isEmpty()
+                            ? EnumSet.noneOf(FlipStatus.class)
+                            : EnumSet.copyOf(includedStatuses);
                     cachedFlips.clear();
-                    Predicate<FlipV2> flipFilter = filteredItems.isEmpty() ? f -> true : f -> filteredItems.contains(f.getItemId());
-                    flipManager.aggregateFlips(intervalStartTime, accountId, includeBuyingFlips, (f) -> {
-                        if(flipFilter.test(f)) {
+                    Predicate<FlipV2> itemFilter = filteredItems.isEmpty() ? f -> true : f -> filteredItems.contains(f.getItemId());
+                    Predicate<FlipV2> statusFilter = f -> includedStatuses.contains(f.getStatus());
+                    flipManager.aggregateFlips(intervalStartTime, accountId, includedStatuses.contains(FlipStatus.BUYING), (f) -> {
+                        if(itemFilter.test(f) && statusFilter.test(f)) {
                             f.setCachedItemName(itemController.getItemName(f.getItemId()));
                             cachedFlips.add(f);
                         }
@@ -225,7 +249,12 @@ public class FlipFilterAndSort {
     }
 
     private boolean canUseFlipsManager() {
-        return !includeBuyingFlips && sortDirection == SortDirection.DESC && sortColumn.equals("Last sell time") && filteredItems.isEmpty();
+        return !includedStatuses.contains(FlipStatus.BUYING)
+                && includedStatuses.contains(FlipStatus.FINISHED)
+                && includedStatuses.contains(FlipStatus.SELLING)
+                && sortDirection == SortDirection.DESC
+                && sortColumn.equals("Last sell time")
+                && filteredItems.isEmpty();
     }
 
     public synchronized void writeCsvRecords(FileWriter writer) {
@@ -243,14 +272,14 @@ public class FlipFilterAndSort {
             }
         };
         if (canUseFlipsManager()) {
-            flipManager.aggregateFlips(intervalStartTime, accountId, includeBuyingFlips, c);
+            flipManager.aggregateFlips(intervalStartTime, accountId, false, c);
         } else {
             cachedFlips.forEach(c);
         }
     }
 
     private String toCSVRow(FlipV2 f) {
-        Map<Integer, String> accountIdToDisplayName = fvLoginRS.get().accountIdToDisplayName;
+        Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
         long profitPerItem = f.getClosedQuantity() > 0 ? f.getProfit() / f.getClosedQuantity() : 0L;
 
         return String.join(",",

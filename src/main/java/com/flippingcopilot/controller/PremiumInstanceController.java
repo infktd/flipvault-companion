@@ -1,7 +1,6 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlipVaultConfig;
-import com.flippingcopilot.model.OsrsLoginManager;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.model.PremiumInstanceStatus;
 import com.flippingcopilot.model.SuggestionManager;
 import com.flippingcopilot.ui.PremiumInstancePanel;
@@ -19,9 +18,8 @@ import java.util.function.Consumer;
 public class PremiumInstanceController {
 
     private final ApiRequestHandler apiRequestHandler;
-    private final FlipVaultConfig fvConfig;
+    private final FlippingCopilotConfig copilotConfig;
     private final SuggestionManager suggestionManager;
-    private final OsrsLoginManager osrsLoginManager;
     private JDialog dialog;
 
     public void loadAndOpenPremiumInstanceDialog() {
@@ -30,13 +28,13 @@ public class PremiumInstanceController {
             dialog.dispose();
         }
         dialog = new JDialog();
-        dialog.setTitle("Account Management");
+        dialog.setTitle("Premium accounts management");
         dialog.setModal(false);
-        dialog.setSize(450, 300);
+        dialog.setSize(400, 300);
         dialog.setLocationRelativeTo(null);
 
         // Create the panel
-        PremiumInstancePanel panel = new PremiumInstancePanel(fvConfig, apiRequestHandler, suggestionManager);
+        PremiumInstancePanel panel = new PremiumInstancePanel(copilotConfig, apiRequestHandler, suggestionManager);
         dialog.setContentPane(panel);
 
         // Show loading state
@@ -50,7 +48,7 @@ public class PremiumInstanceController {
                 }
             });
         };
-        apiRequestHandler.asyncGetPremiumInstanceStatus(c, osrsLoginManager.getPlayerDisplayName());
+        apiRequestHandler.asyncGetPremiumInstanceStatus(c);
         dialog.setVisible(true);
     }
 }

@@ -1,5 +1,10 @@
 package com.flippingcopilot.model;
 
+import com.flippingcopilot.controller.ItemController;
+import com.flippingcopilot.controller.PortfolioController;
+import com.flippingcopilot.controller.GrandExchange;
+import com.flippingcopilot.rs.BankStateRS;
+import com.flippingcopilot.rs.HeldItemSyncStateRS;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -8,8 +13,11 @@ import net.runelite.api.gameval.InventoryID;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Singleton
@@ -22,28 +30,26 @@ public class AccountStatusManager {
     private final GrandExchangeUncollectedManager geUncollected;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
     private final PausedManager pausedManager;
+    private final PortfolioController portfolioController;
+    private final GrandExchange grandExchange;
+    private final BankStateRS bankStateRS;
+    private final TransactionManager transactionManager;
+    private final HeldItemSyncStateRS heldItemSyncStateRS;
+    private final ItemController itemController;
 
     // state
     @Setter
     private int skipSuggestion = -1;
-    private volatile AccountStatus cachedStatus = null;
-
-    public AccountStatus getCachedStatus() {
-        return cachedStatus;
-    }
 
     public synchronized AccountStatus getAccountStatus() {
         Long accountHash =  osrsLoginManager.getAccountHash();
         ItemContainer itemContainer = client.getItemContainer(InventoryID.INV);
         Inventory inventory;
-        boolean inventoryValid;
         if(itemContainer == null) {
             log.warn("Item container was null!");
             inventory = new Inventory();
-            inventoryValid = false;
         } else {
             inventory = Inventory.fromRunelite(itemContainer, client);
-            inventoryValid = true;
         }
         Map<Integer, Long> u = geUncollected.loadAllUncollected(accountHash);
 
@@ -58,6 +64,7 @@ public class AccountStatusManager {
         status.setRsAccountHash(accountHash);
         status.setSkipSuggestion(skipSuggestion);
         status.setSellOnlyMode(suggestionPreferencesManager.isSellOnlyMode());
+        status.setBuyAndHold(suggestionPreferencesManager.isBuyAndHold());
         status.setF2pOnlyMode(suggestionPreferencesManager.isF2pOnlyMode());
         status.setWorldMember(osrsLoginManager.isMembersWorld());
         status.setAccountMember(osrsLoginManager.isAccountMember());
@@ -68,6 +75,14 @@ public class AccountStatusManager {
         status.setReservedSlots(suggestionPreferencesManager.getEffectiveReservedSlots());
         status.setMinPredictedProfit(suggestionPreferencesManager.getMinPredictedProfit());
         status.setDumpMinPredictedProfit(suggestionPreferencesManager.getEffectiveDumpMinPredictedProfit());
+        status.setBankAvailable(bankStateRS.get().isLoaded());
+        status.setBankInventory(bankStateRS.get().getItems());
+        status.setBagInventory(extractBagInventory());
+        status.setSyncExcluded(computeSyncExcludedItems(status.getDisplayName(), u));
+        status.setAllowedSync(
+                grandExchange.isOpen()
+                        && client.getTickCount() > heldItemSyncStateRS.get().getDelayUntilTick()
+        );
 
         Map<Integer, Long> inLimboItems = geUncollected.getLastClearedUncollected();
         List<Integer> clearedSlots = geUncollected.getLastClearedSlots();
@@ -91,9 +106,6 @@ public class AccountStatusManager {
             }
         }
 
-        if (inventoryValid) {
-            cachedStatus = status;
-        }
         return status;
     }
 
@@ -110,6 +122,31 @@ public class AccountStatusManager {
         }
     }
 
+    private Map<Integer, Integer> extractBagInventory() {
+        Map<Integer, Integer> bagInventory = itemController.getRunliteInventory();
+        return bagInventory == null ? new HashMap<>() : bagInventory;
+    }
+
+    private List<Integer> computeSyncExcludedItems(String displayName, Map<Integer, Long> uncollectedItems) {
+        Set<Integer> excluded = new LinkedHashSet<>(portfolioController.getActiveGrandExchangeItemIdsForSync());
+
+        if (uncollectedItems != null) {
+            excluded.addAll(uncollectedItems.keySet());
+        }
+
+        if (displayName != null && !displayName.isEmpty()) {
+            List<Transaction> unAckedTransactions = transactionManager.getUnAckedTransactions(displayName);
+            if (unAckedTransactions != null) {
+                for (Transaction transaction : unAckedTransactions) {
+                    if (transaction != null && transaction.getItemId() > 0) {
+                        excluded.add(transaction.getItemId());
+                    }
+                }
+            }
+        }
+        return new java.util.ArrayList<>(excluded);
+    }
+
     public boolean isSuggestionSkipped() {
         return skipSuggestion != -1;
     }
@@ -120,6 +157,5 @@ public class AccountStatusManager {
 
     public void reset() {
         skipSuggestion = -1;
-        cachedStatus = null;
     }
 }

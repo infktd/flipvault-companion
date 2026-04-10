@@ -1,6 +1,6 @@
 package com.flippingcopilot.ui;
 
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.QuantityFormatter;
 
@@ -59,7 +59,17 @@ public class UIUtilities {
                 + new String[] {"", "K", "M", "B", "T"}[(int) (power / 3)];
     }
 
-    public static Color getProfitColor(long profit, FlipVaultConfig config) {
+    public static Color getProfitColor(long profit, FlippingCopilotConfig config) {
+        if (profit > 0) {
+            return config.profitAmountColor();
+        } else if (profit < 0) {
+            return config.lossAmountColor();
+        } else {
+            return Color.WHITE;
+        }
+    }
+
+    public static Color getProfitColor(double profit, FlippingCopilotConfig config) {
         if (profit > 0) {
             return config.profitAmountColor();
         } else if (profit < 0) {
@@ -75,6 +85,33 @@ public class UIUtilities {
 
     public static String formatProfitWithoutGp(long profit) {
         return quantityToRSDecimalStack(profit, true);
+    }
+
+    public static String formatSuggestionDuration(double durationSeconds) {
+        int totalMinutes = (int) Math.round(durationSeconds / 60.0);
+        totalMinutes = Math.round(totalMinutes / 5.0f) * 5;
+        totalMinutes = Math.max(totalMinutes, 5);
+
+        String formatted = formatDurationMinutes(totalMinutes);
+        if (!formatted.contains("h") && !formatted.contains("d")) {
+            return formatted.replace("m", "min");
+        }
+        return formatted;
+    }
+
+    public static String formatDurationMinutes(int minutes) {
+        int safeMinutes = Math.max(0, minutes);
+        int days = safeMinutes / (24 * 60);
+        int hours = (safeMinutes % (24 * 60)) / 60;
+        int remainingMinutes = safeMinutes % 60;
+
+        if (days > 0) {
+            return days + "d " + hours + "h";
+        }
+        if (hours > 0) {
+            return hours + "h " + remainingMinutes + "m";
+        }
+        return Math.max(1, remainingMinutes) + "m";
     }
 
     public static String truncateString(String string, int length) {

@@ -12,7 +12,7 @@ import java.util.Set;
 @AllArgsConstructor
 @EqualsAndHashCode
 @ToString
-public class FVLoginState {
+public class CopilotLoginState {
 
     public LoginResponse loginResponse = null;
     public Map<String,Integer> displayNameToAccountId = new HashMap<>();
@@ -48,7 +48,7 @@ public class FVLoginState {
         return accountIdToDisplayName.getOrDefault(accountId, "Unknown");
     }
 
-    public FVLoginState copy() {
-        return new FVLoginState(loginResponse, new HashMap<>(displayNameToAccountId), new HashMap<>(accountIdToDisplayName));
+    public CopilotLoginState copy() {
+        return new CopilotLoginState(loginResponse, new HashMap<>(displayNameToAccountId), new HashMap<>(accountIdToDisplayName));
     }
 }

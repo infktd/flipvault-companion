@@ -1,6 +1,6 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.model.OfferManager;
 import com.flippingcopilot.model.OfferStatus;
 import com.flippingcopilot.model.SavedOffer;
@@ -39,7 +39,7 @@ public class SlotProfitColorizer {
     private static final String DETAIL_AND_SETUP_DEFAULT_COLOR = "ffb83f"; // Default color for detail view and offer setup
 
     private final Client client;
-    private final FlipVaultConfig config;
+    private final FlippingCopilotConfig config;
     private final OfferManager offerManager;
     private final GrandExchange grandExchange;
     private final ProfitCalculator profitCalculator;

@@ -1,6 +1,6 @@
 package com.flippingcopilot.ui.graph;
 
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.manager.PriceGraphConfigManager;
 import com.flippingcopilot.ui.graph.model.Constants;
@@ -30,7 +30,7 @@ public class StatsPanel extends JPanel {
     private final JLabel itemIcon = new JLabel();
     private final JLabel itemNameLabel = new JLabel();
 
-    public StatsPanel(PriceGraphConfigManager configManager, FlipVaultConfig fvConfig) {
+    public StatsPanel(PriceGraphConfigManager configManager, FlippingCopilotConfig copilotConfig) {
 
         this.setLayout(new BorderLayout());
 
@@ -86,9 +86,9 @@ public class StatsPanel extends JPanel {
                     String valueStr = value.toString();
                     // Check if the percentage is negative (contains '-' character)
                     if (valueStr.contains("-")) {
-                        c.setForeground(fvConfig.lossAmountColor());
+                        c.setForeground(copilotConfig.lossAmountColor());
                     } else if (!valueStr.equals("0%")) {
-                        c.setForeground(fvConfig.profitAmountColor());
+                        c.setForeground(copilotConfig.profitAmountColor());
                     } else {
                         c.setForeground(table.getForeground());
                     }
@@ -134,9 +134,9 @@ public class StatsPanel extends JPanel {
         model.setValueAt(formatPercentage((float) dataManager.priceChange24H), 5,1);
         model.setValueAt(formatPercentage((float) dataManager.priceChangeWeek), 6,1);
 
-//        // FlipVault price and margin
-//        model.addRow(new Object[]{"FlipVault buy price", formatNumber(dataManager.data.buyPrice)});
-//        model.addRow(new Object[]{"FlipVault sell price", formatNumber(dataManager.data.sellPrice)});
+//        // Copilot price and margin
+//        model.addRow(new Object[]{"Copilot buy price", formatNumber(dataManager.data.buyPrice)});
+//        model.addRow(new Object[]{"Copilot sell price", formatNumber(dataManager.data.sellPrice)});
 //
 //        model.addRow(new Object[]{"Margin", formatNumber(dataManager.margin)});
 //        model.addRow(new Object[]{"Tax", formatNumber(dataManager.tax)});

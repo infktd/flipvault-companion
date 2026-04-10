@@ -14,12 +14,12 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 
-@ConfigGroup("flipvault")
-public interface FlipVaultConfig extends Config
+@ConfigGroup("flippingcopilot")
+public interface FlippingCopilotConfig extends Config
 {
     public enum PriceGraphWebsite
     {
-        FLIPVAULT("FlipVault"),
+        FLIPPING_COPILOT("Flipping Copilot"),
         OSRS_WIKI("OSRS Wiki"),
         GE_TRACKER("GE Tracker"),
         PLATINUM_TOKENS("PlatinumTokens"),
@@ -104,11 +104,22 @@ public interface FlipVaultConfig extends Config
         return false;
     }
     @ConfigItem(
+            keyName = "slotActionSwap",
+            name = "Swap slot left-click action",
+            description = "Automatically set the left-click option on GE slots to match the suggested action (e.g. Abort offer)",
+            section = offerSetupSection,
+            position = 2
+    )
+    default boolean slotActionSwap() {
+        return true;
+    }
+
+    @ConfigItem(
             keyName = "misClickProtection",
             name = "Mis-click prevention",
             description = "Require right click to confirm when price/quantity set incorrectly",
             section = offerSetupSection,
-            position = 2
+            position = 3
     )
     default boolean disableLeftClickConfirm()
     {
@@ -120,7 +131,7 @@ public interface FlipVaultConfig extends Config
             name = "Price/quantity set keybind",
             description = "Keybind to quickly set the price or quantity of a GE offer to the suggested value",
             section = offerSetupSection,
-            position = 3
+            position = 4
     )
     default Keybind quickSetKeybind()
     {
@@ -137,7 +148,7 @@ public interface FlipVaultConfig extends Config
     @ConfigItem(
             keyName = "priceGraphMenuOptionEnabled",
             name = "Enable price graph menu option",
-            description = "Adds a menu option to open FlipVault price graph on applicable right clicks.",
+            description = "Adds a menu option to open copilot price graph on applicable right clicks.",
             section = appearanceSection,
             position = 1
     )
@@ -155,7 +166,7 @@ public interface FlipVaultConfig extends Config
     )
     default PriceGraphWebsite priceGraphWebsite()
     {
-        return PriceGraphWebsite.FLIPVAULT;
+        return PriceGraphWebsite.FLIPPING_COPILOT;
     }
 
     @ConfigItem(
@@ -269,7 +280,7 @@ public interface FlipVaultConfig extends Config
     @ConfigItem(
             keyName = "chatTextColor",
             name = "Chat text color",
-            description = "The color of the text for FlipVault messages in the chat.",
+            description = "The color of the text for copilot messages in the chat.",
             section = notificationsSection,
             position = 4
     )

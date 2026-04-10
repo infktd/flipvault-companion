@@ -1,13 +1,11 @@
 package com.flippingcopilot.ui;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.controller.FVLoginController;
-import com.flippingcopilot.model.ApiKeyInfo;
+import com.flippingcopilot.controller.CopilotLoginController;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 import okhttp3.Call;
-import java.util.List;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -26,7 +24,7 @@ import java.awt.event.ActionEvent;
 public class LoginPanel extends JPanel {
     private final static int PAGE_WIDTH = 225;
 
-    private final FVLoginController fvLoginController;
+    private final CopilotLoginController copilotLoginController;
     private final ApiRequestHandler apiRequestHandler;
 
     private final JButton signUpButton = new JButton("Sign up");
@@ -42,8 +40,8 @@ public class LoginPanel extends JPanel {
     private volatile Call discordLoginCall;
 
     @Inject
-    public LoginPanel(FVLoginController fvLoginController, ApiRequestHandler apiRequestHandler) {
-        this.fvLoginController = fvLoginController;
+    public LoginPanel(CopilotLoginController copilotLoginController, ApiRequestHandler apiRequestHandler) {
+        this.copilotLoginController = copilotLoginController;
         this.apiRequestHandler = apiRequestHandler;
         this.setLayout(new BorderLayout());
         this.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -167,12 +165,12 @@ public class LoginPanel extends JPanel {
         signUpButton.setPreferredSize(new Dimension((PAGE_WIDTH - 8) / 2, 36));
         signUpButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         signUpButton.addActionListener((ActionEvent a) -> {
-            LinkBrowser.browse("https://flipvault.app/signup");
+            LinkBrowser.browse("https://flippingcopilot.com/signup");
         });
         loginButton.setPreferredSize(new Dimension((PAGE_WIDTH - 8) / 2, 36));
         loginButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         loginButton.addActionListener((ActionEvent a) -> {
-            fvLoginController.onLoginPressed(emailTextField.getText(), passwordTextField.getText());
+            copilotLoginController.onLoginPressed(emailTextField.getText(), passwordTextField.getText());
         });
         container.add(signUpButton);
         container.add(loginButton);
@@ -189,16 +187,12 @@ public class LoginPanel extends JPanel {
             discordLoginCall = apiRequestHandler.discordLoginAsync(
                     LinkBrowser::browse,
                 (loginResponse) -> {
-                    if (loginResponse.needsKeySelection()) {
-                        showKeySelectionDialog(loginResponse.getKeys());
-                    } else {
-                        fvLoginController.onLoginResponse(loginResponse);
-                        endLoading();
-                    }
+                    copilotLoginController.onLoginResponse(loginResponse);
+                    endLoading();
                 },
                 (error) -> {
                     String msg = discordLoginCall == null ? "Discord login cancelled" : error.getResponseMessage();
-                    fvLoginController.onLoginFailure(msg);
+                    copilotLoginController.onLoginFailure(msg);
                     endLoading();
                 }
             );
@@ -238,57 +232,6 @@ public class LoginPanel extends JPanel {
         container.setPreferredSize(new Dimension(PAGE_WIDTH, 36));
         container.setAlignmentX(LEFT_ALIGNMENT);
         return container;
-    }
-
-    private void showKeySelectionDialog(List<ApiKeyInfo> keys) {
-        SwingUtilities.invokeLater(() -> {
-            String[] options = keys.stream()
-                    .map(ApiKeyInfo::getDisplayLabel)
-                    .toArray(String[]::new);
-
-            String selected = (String) JOptionPane.showInputDialog(
-                    SwingUtilities.getWindowAncestor(this),
-                    "Select which account to trade on:",
-                    "FlipVault — Select Key",
-                    JOptionPane.PLAIN_MESSAGE,
-                    null,
-                    options,
-                    options.length > 0 ? options[0] : null
-            );
-
-            if (selected == null) {
-                // User cancelled
-                endLoading();
-                return;
-            }
-
-            // Find the matching key
-            ApiKeyInfo chosen = null;
-            for (ApiKeyInfo key : keys) {
-                if (key.getDisplayLabel().equals(selected)) {
-                    chosen = key;
-                    break;
-                }
-            }
-
-            if (chosen == null) {
-                endLoading();
-                return;
-            }
-
-            // Call server to get the raw key for this selection
-            apiRequestHandler.selectKeyAsync(
-                    chosen.getId(),
-                    (loginResponse) -> {
-                        fvLoginController.onLoginResponse(loginResponse);
-                        endLoading();
-                    },
-                    (error) -> {
-                        fvLoginController.onLoginFailure(error.getResponseMessage());
-                        endLoading();
-                    }
-            );
-        });
     }
 
     public void refresh() {

@@ -147,7 +147,7 @@ public class GeAddTransactionsDialogPanel extends JPanel {
         centerPanel.add(scrollPane, BorderLayout.CENTER);
 
         JLabel warningLabel = new JLabel("<html><div style='text-align: left; width: 400px;'>" +
-                "Only add transactions not recorded by FlipVault. It is your responsibility not to add duplicates." +
+                "Only add transactions not recorded by Copilot. It is your responsibility not to add duplicates." +
                 "</div></html>");
         warningLabel.setFont(FontManager.getRunescapeFont());
         warningLabel.setForeground(Color.RED);

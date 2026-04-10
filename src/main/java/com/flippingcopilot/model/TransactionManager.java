@@ -1,9 +1,8 @@
 package com.flippingcopilot.model;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.controller.Persistance;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import com.flippingcopilot.util.MutableReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,10 +27,8 @@ public class TransactionManager {
     private final FlipManager flipManager;
     private final ScheduledExecutorService executorService;
     private final ApiRequestHandler api;
-    private final FVLoginRS fvLoginRS;
+    private final CopilotLoginRS copilotLoginRS;
     private final OsrsLoginManager osrsLoginManager;
-    private final SessionManager sessionManager;
-    private final ItemController itemController;
 
     // state
     private final ConcurrentMap<String, List<Transaction>> cachedUnAckedTransactions = new ConcurrentHashMap<>();
@@ -51,7 +48,7 @@ public class TransactionManager {
 
         BiConsumer<Integer, List<FlipV2>> onSuccess = (userId, flips) -> {
             if(!flips.isEmpty()) {
-                fvLoginRS.addAccountIfMissing(flips.get(0).getAccountId(), displayName, userId);
+                copilotLoginRS.addAccountIfMissing(flips.get(0).getAccountId(), displayName, userId);
             }
             flipManager.mergeFlips(flips, userId);
             log.info("sending {} transactions took {}ms", toSend.size(), (System.nanoTime() - s) / 1000_000);
@@ -70,8 +67,8 @@ public class TransactionManager {
                 transactionSyncScheduled.get(displayName).set(false);
             }
             String currentDisplayName = osrsLoginManager.getPlayerDisplayName();
-            if (fvLoginRS.get().isLoggedIn() && (currentDisplayName == null || currentDisplayName.equals(displayName))) {
-                log.warn("failed to send transactions to FV server {}", e.getMessage(), e);
+            if (copilotLoginRS.get().isLoggedIn() && (currentDisplayName == null || currentDisplayName.equals(displayName))) {
+                log.warn("failed to send transactions to copilot server {}", e.getMessage(), e);
                 scheduleSyncIn(10, displayName);
             }
         };
@@ -88,39 +85,20 @@ public class TransactionManager {
             unAckedTransactions.add(transaction);
             Persistance.storeUnAckedTransactions(unAckedTransactions, displayName);
         }
-
-        long profit = 0;
-        if (OfferStatus.BUY.equals(transaction.getType())) {
-            // Track buy locally so we can estimate profit when the paired sell comes in
-            flipManager.trackLocalBuy(displayName, transaction.getItemId(), transaction.getAmountSpent(), transaction.getQuantity());
-        } else if (OfferStatus.SELL.equals(transaction.getType())) {
-            // Try server-side estimate first (requires account data from server)
-            Integer accountId = fvLoginRS.get().getAccountId(displayName);
+        MutableReference<Long> profit = new MutableReference<>(0L);
+        if (OfferStatus.SELL.equals(transaction.getType())) {
+            Integer accountId = copilotLoginRS.get().getAccountId(displayName);
             if (accountId != null && accountId != -1) {
                 Long p = flipManager.estimateTransactionProfit(accountId, transaction);
-                if (p != null) profit = p;
-            }
-            // Fall back to local estimate if server data is unavailable
-            if (profit == 0) {
-                Long p = flipManager.estimateLocalProfit(displayName, transaction);
-                if (p != null) profit = p;
-            }
-            if (profit != 0) {
-                sessionManager.addSessionProfit(profit, displayName);
-                sessionManager.addSessionTrade(new SessionTrade(
-                        transaction.getItemId(),
-                        itemController.getItemName(transaction.getItemId()),
-                        transaction.getQuantity(),
-                        profit,
-                        System.currentTimeMillis()
-                ));
+                if (p != null) {
+                    profit.setValue(p);
+                }
             }
         }
-
-        if (fvLoginRS.get().isLoggedIn()) {
+        if (copilotLoginRS.get().isLoggedIn()) {
             scheduleSyncIn(0, displayName);
         }
-        return profit;
+        return profit.getValue();
     }
 
     public List<Transaction> getUnAckedTransactions(String displayName) {

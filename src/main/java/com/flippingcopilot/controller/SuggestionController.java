@@ -1,8 +1,9 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
+import com.flippingcopilot.rs.PortfolioStateRS;
 import com.flippingcopilot.ui.*;
 import com.flippingcopilot.ui.flipsdialog.FlipsDialogController;
 import com.flippingcopilot.ui.graph.model.Data;
@@ -45,18 +46,20 @@ public class SuggestionController {
     private final ApiRequestHandler apiRequestHandler;
     private final Notifier notifier;
     private final OfferManager offerManager;
-    private final FVLoginRS fvLoginRS;
+    private final CopilotLoginRS copilotLoginRS;
     private final ClientThread clientThread;
-    private final FlipVaultConfig config;
+    private final FlippingCopilotConfig config;
     private final SuggestionManager suggestionManager;
     private final AccountStatusManager accountStatusManager;
     private final GrandExchangeUncollectedManager uncollectedManager;
+    private final PortfolioStateRS portfolioStateRS;
     private final FlipsDialogController flipDialogController;
     private final GePreviousSearch gePreviousSearch;
 
+
     private MainPanel mainPanel;
     private LoginPanel loginPanel;
-    private FVPanel fvPanel;
+    private CopilotPanel copilotPanel;
     private SuggestionPanel suggestionPanel;
 
     public void togglePause() {
@@ -132,7 +135,7 @@ public class SuggestionController {
 
     public void getSuggestionAsync() {
         suggestionManager.setSuggestionNeeded(false);
-        if (!fvLoginRS.get().isLoggedIn() || !osrsLoginManager.isValidLoginState()) {
+        if (!copilotLoginRS.get().isLoggedIn() || !osrsLoginManager.isValidLoginState()) {
             return;
         }
         if (suggestionManager.isSuggestionRequestInProgress()) {
@@ -151,7 +154,11 @@ public class SuggestionController {
         suggestionManager.setGraphDataReadingInProgress(!skipGraphData);
         Consumer<Suggestion> suggestionConsumer = (newSuggestion) -> handleSuggestionReceived(oldSuggestion, newSuggestion, accountStatus);
         Consumer<Data> graphDataConsumer = (d) -> {
-            SwingUtilities.invokeLater(() -> flipDialogController.priceGraphPanel.setSuggestionPriceData(d));
+            SwingUtilities.invokeLater(() -> {
+                if (flipDialogController.priceGraphPanel != null) {
+                    flipDialogController.priceGraphPanel.setSuggestionPriceData(d);
+                }
+            });
             suggestionManager.setGraphDataReadingInProgress(false);
         };
         Consumer<HttpResponseException> onFailure = (e) -> {
@@ -160,7 +167,7 @@ public class SuggestionController {
             suggestionManager.setSuggestionRequestInProgress(false);
             suggestionManager.setGraphDataReadingInProgress(false);
             if (e.getResponseCode() == 401) {
-                fvLoginRS.clear();
+                copilotLoginRS.clear();
                 mainPanel.refresh();
                 loginPanel.showLoginErrorMessage("Login timed out. Please log in again");
             } else {
@@ -169,7 +176,10 @@ public class SuggestionController {
         };
         suggestionPanel.refresh();
         log.debug("tick {} getting suggestion", client.getTickCount());
-        apiRequestHandler.getSuggestionAsync(accountStatus.toJson(gson, grandExchange.isOpen(), config.priceGraphWebsite() == FlipVaultConfig.PriceGraphWebsite.FLIPVAULT), suggestionConsumer, graphDataConsumer, onFailure, skipGraphData);
+        boolean sendGraphData = config.priceGraphWebsite() == FlippingCopilotConfig.PriceGraphWebsite.FLIPPING_COPILOT && !config.lowDataMode();
+        boolean geOpen = grandExchange.isOpen();
+        log.debug("sending suggestion {}", accountStatus.toJson(gson, geOpen, sendGraphData));
+        apiRequestHandler.getSuggestionAsync(accountStatus.encodeProto(geOpen, sendGraphData), suggestionConsumer, graphDataConsumer, onFailure, skipGraphData);
     }
 
     void handleDumpSuggestion(Suggestion suggestion) {
@@ -200,6 +210,12 @@ public class SuggestionController {
             client.playSoundEffect(SoundEffectID.GE_ADD_OFFER_DINGALING);
         }
         suggestionManager.setSuggestion(newSuggestion);
+        portfolioStateRS.updatePortfolioState(
+                newSuggestion.getBankItems(),
+                newSuggestion.getPortfolioItems(),
+                accountStatus.getOffers(),
+                accountStatus.getUncollected()
+        );
         suggestionManager.setSuggestionError(null);
         suggestionManager.setSuggestionRequestInProgress(false);
         log.debug("Received suggestion: {}", newSuggestion.toString());
@@ -208,12 +224,20 @@ public class SuggestionController {
         suggestionPanel.refresh();
         showNotifications(oldSuggestion, newSuggestion, accountStatus);
         if (!newSuggestion.isWaitSuggestion()) {
-            SwingUtilities.invokeLater(() -> flipDialogController.priceGraphPanel.newSuggestedItemId(
-                    newSuggestion.getItemId(),
-                    buildPriceLine(newSuggestion)
-            ));
+            SwingUtilities.invokeLater(() -> {
+                if (flipDialogController.priceGraphPanel != null) {
+                    flipDialogController.priceGraphPanel.newSuggestedItemId(
+                            newSuggestion.getItemId(),
+                            buildPriceLine(newSuggestion)
+                    );
+                }
+            });
         } else {
-            SwingUtilities.invokeLater(() -> flipDialogController.priceGraphPanel.suggestedPriceLine = null);
+            SwingUtilities.invokeLater(() -> {
+                if (flipDialogController.priceGraphPanel != null) {
+                    flipDialogController.priceGraphPanel.suggestedPriceLine = null;
+                }
+            });
         }
         if (client.getVarcIntValue(VarClientInt.INPUT_TYPE) == 14) {
             clientThread.invokeLater(gePreviousSearch::showSuggestedItemInSearch);
@@ -244,7 +268,7 @@ public class SuggestionController {
             if (config.enableTrayNotifications()) {
                 notifier.notify(msg);
             }
-            if (!fvPanel.isShowing() && config.enableChatNotifications()) {
+            if (!copilotPanel.isShowing() && config.enableChatNotifications()) {
                 showChatNotifications(newSuggestion, accountStatus);
             }
         }
@@ -262,7 +286,7 @@ public class SuggestionController {
 
     private void showChatNotifications(Suggestion newSuggestion, AccountStatus accountStatus) {
         if (accountStatus.isCollectNeeded(newSuggestion, grandExchange.isSetupOfferOpen())) {
-            clientThread.invokeLater(() -> showChatNotification("FlipVault: Collect items"));
+            clientThread.invokeLater(() -> showChatNotification("Flipping Copilot: Collect items"));
         }
         clientThread.invokeLater(() -> showChatNotification(newSuggestion.toMessage()));
     }

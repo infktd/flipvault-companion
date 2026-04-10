@@ -1,6 +1,6 @@
 package com.flippingcopilot.ui.graph;
 
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.manager.PriceGraphConfigManager;
 import com.flippingcopilot.model.FlipV2;
@@ -29,10 +29,10 @@ public class FlipStatsPanel extends JPanel {
     private final JTable statsTable;
     private final JLabel itemIcon = new JLabel();
     private final JLabel itemNameLabel = new JLabel();
-    private final FlipVaultConfig fvConfig;
+    private final FlippingCopilotConfig copilotConfig;
 
-    public FlipStatsPanel(PriceGraphConfigManager configManager, FlipVaultConfig fvConfig) {
-        this.fvConfig = fvConfig;
+    public FlipStatsPanel(PriceGraphConfigManager configManager, FlippingCopilotConfig copilotConfig) {
+        this.copilotConfig = copilotConfig;
         this.setLayout(new BorderLayout());
 
         JPanel iconPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
@@ -92,9 +92,9 @@ public class FlipStatsPanel extends JPanel {
                     try {
                         long profitValue = Long.parseLong(numStr);
                         if (profitValue < 0) {
-                            c.setForeground(fvConfig.lossAmountColor());
+                            c.setForeground(copilotConfig.lossAmountColor());
                         } else if (profitValue > 0) {
-                            c.setForeground(fvConfig.profitAmountColor());
+                            c.setForeground(copilotConfig.profitAmountColor());
                         } else {
                             c.setForeground(table.getForeground());
                         }

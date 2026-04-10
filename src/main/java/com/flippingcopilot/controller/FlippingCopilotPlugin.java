@@ -1,9 +1,10 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.FVLoginRS;
-import com.flippingcopilot.rs.FVConfigRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
+import com.flippingcopilot.rs.BankStateRS;
+import com.flippingcopilot.rs.FlippingCopilotConfigRS;
 import com.flippingcopilot.rs.GrandExchangeOpenRS;
 import com.flippingcopilot.rs.OsrsLoginRS;
 import com.flippingcopilot.ui.*;
@@ -41,10 +42,10 @@ import java.util.concurrent.TimeUnit;
 		name = "FlipVault",
 		description = "Your AI assistant for trading"
 )
-public class FlipVaultPlugin extends Plugin {
+public class FlippingCopilotPlugin extends Plugin {
 
 	@Inject
-	private FlipVaultConfig config;
+	private FlippingCopilotConfig config;
 	@Inject
 	private Client client;
 	@Inject
@@ -75,11 +76,11 @@ public class FlipVaultPlugin extends Plugin {
 	@Inject
 	private KeybindHandler keybindHandler;
 	@Inject
-	private FVLoginController fvLoginController;
+	private CopilotLoginController copilotLoginController;
 	@Inject
 	private OverlayManager overlayManager;
 	@Inject
-	private FVLoginRS fvLoginRS;
+	private CopilotLoginRS copilotLoginRS;
 	@Inject
 	private HighlightController highlightController;
 	@Inject
@@ -115,7 +116,13 @@ public class FlipVaultPlugin extends Plugin {
 	@Inject
 	private OsrsLoginRS osrsLoginRS;
 	@Inject
-	private FVConfigRS configRS;
+	private FlippingCopilotConfigRS configRS;
+	@Inject
+	private InventorySlotTooltipOverlay inventorySlotTooltipOverlay;
+ 	@Inject
+	private InventoryPortfolioBadgeOverlay inventoryPortfolioBadgeOverlay;
+	@Inject
+	private BankStateRS bankStateRS;
 
 	// We use our own ThreadPool since the default ScheduledExecutorService only has a single thread and we don't want to block it
 	@Provides
@@ -137,26 +144,28 @@ public class FlipVaultPlugin extends Plugin {
 
 	@Override
 	protected void startUp() throws Exception {
+		overlayManager.add(inventorySlotTooltipOverlay);
+		overlayManager.add(inventoryPortfolioBadgeOverlay);
 		highlightController.activate();
 		Persistance.setUp(gson);
 		// seems we need to delay instantiating the UI till here as otherwise the panels look different
 		mainPanel = injector.getInstance(MainPanel.class);
 		final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/icon-small.png");
 		navButton = NavigationButton.builder()
-				.tooltip("FlipVault")
+				.tooltip("Flipping Copilot")
 				.icon(icon)
 				.priority(3)
 				.panel(mainPanel)
 				.build();
 		clientToolbar.addNavigation(navButton);
-		fvLoginController.setLoginPanel(mainPanel.loginPanel);
-		fvLoginController.setMainPanel(mainPanel);
-		suggestionController.setFvPanel(mainPanel.fvPanel);
+		copilotLoginController.setLoginPanel(mainPanel.loginPanel);
+		copilotLoginController.setMainPanel(mainPanel);
+		suggestionController.setCopilotPanel(mainPanel.copilotPanel);
 		suggestionController.setMainPanel(mainPanel);
 		suggestionController.setLoginPanel(mainPanel.loginPanel);
-		suggestionController.setSuggestionPanel(mainPanel.fvPanel.suggestionPanel);
-		grandExchangeCollectHandler.setSuggestionPanel(mainPanel.fvPanel.suggestionPanel);
-		statsPanel = mainPanel.fvPanel.statsPanel;
+		suggestionController.setSuggestionPanel(mainPanel.copilotPanel.suggestionPanel);
+		grandExchangeCollectHandler.setSuggestionPanel(mainPanel.copilotPanel.suggestionPanel);
+		statsPanel = mainPanel.copilotPanel.statsPanel;
 
 		mainPanel.refresh();
 
@@ -173,7 +182,7 @@ public class FlipVaultPlugin extends Plugin {
 					boolean isFlipping = accStatus != null && accStatus.currentlyFlipping();
 					long cashStack = accStatus == null ? 0 : accStatus.currentCashStack();
 					if(sessionManager.updateSessionStats(isFlipping, cashStack)) {
-						mainPanel.fvPanel.statsPanel.refresh(false, fvLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
+						mainPanel.copilotPanel.statsPanel.refresh(false, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
 					}
 				}
 			})
@@ -182,13 +191,15 @@ public class FlipVaultPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() throws Exception {
+		overlayManager.remove(inventorySlotTooltipOverlay);
+		overlayManager.remove(inventoryPortfolioBadgeOverlay);
 		offerManager.saveAll();
 		highlightController.deactivateAndRemoveAll();
 		clientThread.invokeLater(() -> slotProfitColorizer.resetAllSlots());
 		clientToolbar.removeNavigation(navButton);
-		if(fvLoginRS.get().isLoggedIn()) {
+		if(copilotLoginRS.get().isLoggedIn()) {
 			String displayName = osrsLoginManager.getLastDisplayName();
-			Integer accountId = fvLoginRS.get().getAccountId(displayName);
+			Integer accountId = copilotLoginRS.get().getAccountId(displayName);
 			if (accountId != null && accountId != -1) {
 				webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
 			}
@@ -197,8 +208,8 @@ public class FlipVaultPlugin extends Plugin {
 	}
 
 	@Provides
-	public FlipVaultConfig provideConfig(ConfigManager configManager) {
-		return configManager.getConfig(FlipVaultConfig.class);
+	public FlippingCopilotConfig provideConfig(ConfigManager configManager) {
+		return configManager.getConfig(FlippingCopilotConfig.class);
 	}
 
 	//---------------------------- Event Handlers ----------------------------//
@@ -219,9 +230,11 @@ public class FlipVaultPlugin extends Plugin {
 
 	@Subscribe
 	public void onGameTick(GameTick event) {
+		bankStateRS.onGameTick();
+		grandExchangeOpenRS.set(grandExchange.isOpen());
+
 		suggestionController.onGameTick();
 		offerEventHandler.onGameTick();
-		grandExchangeOpenRS.set(grandExchange.isOpen());
 		osrsLoginRS.set(osrsLoginRS.get().nextState(client));
 	}
 
@@ -245,8 +258,10 @@ public class FlipVaultPlugin extends Plugin {
 
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
-		menuHandler.injectFVPriceGraphMenuEntry(event);
+		menuHandler.injectInventoryPortfolioMenuEntry(event);
+		menuHandler.injectCopilotPriceGraphMenuEntry(event);
 		menuHandler.injectConfirmMenuEntry(event);
+		menuHandler.injectSlotActionSwapMenuEntry(event);
 	}
 
 	@Subscribe
@@ -288,7 +303,7 @@ public class FlipVaultPlugin extends Plugin {
 				geHistoryTabController.onGeHistoryTabClosed();
 				accountStatusManager.reset();
 				grandExchangeUncollectedManager.reset();
-				statsPanel.refresh(true, fvLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
+				statsPanel.refresh(true, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
 				osrsLoginRS.set(osrsLoginRS.get().nextState(client));
 				mainPanel.refresh();
 				break;
@@ -311,16 +326,16 @@ public class FlipVaultPlugin extends Plugin {
 						return false;
 					}
 					statsPanel.resetIntervalDropdownToSession();
-					Integer accountId = fvLoginRS.get().getAccountId(name);
+					Integer accountId = copilotLoginRS.get().getAccountId(name);
 					if (accountId != null && accountId != -1) {
 						flipManager.setIntervalAccount(accountId);
 					} else {
 						flipManager.setIntervalAccount(null);
 					}
 					flipManager.setIntervalStartTime(sessionManager.getCachedSessionData().startTime);
-					statsPanel.refresh(true, fvLoginRS.get().isLoggedIn()  && osrsLoginManager.isValidLoginState());
+					statsPanel.refresh(true, copilotLoginRS.get().isLoggedIn()  && osrsLoginManager.isValidLoginState());
 					mainPanel.refresh();
-					if(fvLoginRS.get().isLoggedIn()) {
+					if(copilotLoginRS.get().isLoggedIn()) {
 						transactionManager.scheduleSyncIn(0, name);
 					}
 					return true;
@@ -337,9 +352,9 @@ public class FlipVaultPlugin extends Plugin {
 	public void onClientShutdown(ClientShutdown clientShutdownEvent) {
 		log.debug("client shutdown event received");
 		offerManager.saveAll();
-		if(fvLoginRS.get().isLoggedIn()) {
+		if(copilotLoginRS.get().isLoggedIn()) {
 			String displayName = osrsLoginManager.getLastDisplayName();
-			Integer accountId = fvLoginRS.get().getAccountId(displayName);
+			Integer accountId = copilotLoginRS.get().getAccountId(displayName);
 			if (accountId != null && accountId != -1) {
 				webHookController.sendMessage(flipManager.calculateStats(sessionManager.getCachedSessionData().startTime, accountId), sessionManager.getCachedSessionData(), displayName, false);
 			}
@@ -348,11 +363,11 @@ public class FlipVaultPlugin extends Plugin {
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
-		if (event.getGroup().equals("flipvault")) {
-			log.debug("FV config changed event received");
+		if (event.getGroup().equals("flippingcopilot")) {
+			log.debug("copilot config changed event received");
 			configRS.forceSet(config);
 			if (event.getKey().equals("profitAmountColor") || event.getKey().equals("lossAmountColor")) {
-				mainPanel.fvPanel.statsPanel.refresh(true, fvLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
+				mainPanel.copilotPanel.statsPanel.refresh(true, copilotLoginRS.get().isLoggedIn() && osrsLoginManager.isValidLoginState());
 			}
 			if (event.getKey().equals("suggestionHighlights")) {
 				clientThread.invokeLater(() -> highlightController.redraw());

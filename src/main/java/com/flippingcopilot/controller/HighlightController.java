@@ -1,6 +1,6 @@
 package com.flippingcopilot.controller;
 
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.model.*;
 import com.flippingcopilot.ui.WidgetHighlightOverlay;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ import java.util.function.Supplier;
 public class HighlightController {
 
     // dependencies
-    private final FlipVaultConfig config;
+    private final FlippingCopilotConfig config;
     private final SuggestionManager suggestionManager;
     private final SuggestionPreferencesManager suggestionPreferencesManager;
     private final GrandExchange grandExchange;
@@ -164,7 +164,7 @@ public class HighlightController {
         boolean itemMatches = s.currentItemId == suggestion.getItemId();
 
         // Prioritise certain dump alert cases
-        if(suggestion.isDumpAlert) {
+        if (suggestion.isDumpSuggestion()) {
             if (!offerTypeMatches || accountStatusManager.getAccountStatus().isCollectNeeded(suggestion, grandExchange.isSetupOfferOpen())) {
                 highlightBackButton(blueHighlight);
             } else if (!s.searchOpen && s.currentItemId != -1 && !itemMatches) {
@@ -247,7 +247,8 @@ public class HighlightController {
         AccountStatus accountStatus = accountStatusManager.getAccountStatus();
         if (offerQuantity != suggestion.getQuantity()) {
             Widget setQuantityButton;
-            if (accountStatus.getInventory().getTotalAmount(suggestion.getItemId()) == suggestion.getQuantity()) {
+            if (accountStatus.getInventory().getTotalAmount(suggestion.getItemId()) == suggestion.getQuantity()
+                && suggestion.isSellSuggestion()) {
                 setQuantityButton = grandExchange.getSetQuantityAllButton();
             } else {
                 setQuantityButton = grandExchange.getSetQuantityButton();

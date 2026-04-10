@@ -1,7 +1,7 @@
 package com.flippingcopilot.ui;
 
-import com.flippingcopilot.controller.FVLoginController;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.controller.CopilotLoginController;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
@@ -25,26 +25,26 @@ public class MainPanel extends PluginPanel {
 
     // dependencies
     public final LoginPanel loginPanel;
-    public final FVPanel fvPanel;
-    private final FVLoginRS fvLoginRS;
+    public final CopilotPanel copilotPanel;
+    private final CopilotLoginRS copilotLoginRS;
 
     // UI components
     private final CardLayout cardLayout = new CardLayout();
 
     @Inject
-    public MainPanel(FVPanel fvPanel,
+    public MainPanel(CopilotPanel copilotPanel,
                      LoginPanel loginPanel,
-                     FVLoginRS fvLoginRS) {
+                     CopilotLoginRS copilotLoginRS) {
         super(false);
-        this.fvLoginRS = fvLoginRS;
-        this.fvPanel = fvPanel;
+        this.copilotLoginRS = copilotLoginRS;
+        this.copilotPanel = copilotPanel;
         this.loginPanel = loginPanel;
 
         setLayout(cardLayout);
         setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
         add(buildLoggedInView(), "logged-in");
         add(buildLoggedOutView(), "logged-out");
-        cardLayout.show(this, fvLoginRS.get().isLoggedIn() ? "logged-in" : "logged-out");
+        cardLayout.show(this, copilotLoginRS.get().isLoggedIn() ? "logged-in" : "logged-out");
 
     }
 
@@ -62,7 +62,7 @@ public class MainPanel extends PluginPanel {
         wrapper.setLayout(new BorderLayout());
         JPanel topBar = constructTopBar(true);
         wrapper.add(topBar, BorderLayout.NORTH);
-        wrapper.add(fvPanel, BorderLayout.CENTER);
+        wrapper.add(copilotPanel, BorderLayout.CENTER);
         return wrapper;
     }
 
@@ -74,13 +74,13 @@ public class MainPanel extends PluginPanel {
             SwingUtilities.invokeLater(this::refresh);
             return;
         }
-        if (fvLoginRS.get().isLoggedIn()) {
+        if (copilotLoginRS.get().isLoggedIn()) {
             showLoggedInView();
-            fvPanel.refresh();
+            copilotPanel.refresh();
         } else {
             showLoggedOutView();
             loginPanel.refresh();
-            fvPanel.suggestionPanel.refresh();
+            copilotPanel.suggestionPanel.refresh();
         }
     }
 
@@ -104,24 +104,29 @@ public class MainPanel extends PluginPanel {
 
         JPanel topBar = new JPanel();
         topBar.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        int columns = isLoggedIn ? 3 : 2;
+        int columns = isLoggedIn ? 4 : 3;
         topBar.setLayout(new GridLayout(1, columns));
 
+        JLabel reddit = buildTopBarUriButton(UIUtilities.redditIcon,
+                "Flipping Copilot reddit",
+                "https://www.reddit.com/r/FlippingCopilot/");
+        topBar.add(reddit);
+
         JLabel discord = buildTopBarUriButton(UIUtilities.discordIcon,
-                "FlipVault Discord",
-                "https://discord.gg/xd4M5cfUCx");
+                "Flipping Copilot Discord",
+                "https://discord.gg/UyQxA4QJAq");
         topBar.add(discord);
 
         JLabel website = buildTopBarUriButton(UIUtilities.internetIcon,
-                "FlipVault website",
-                "https://flipvault.app");
+                "Flipping Copilot website",
+                "https://flippingcopilot.com");
         topBar.add(website);
 
 
         if (isLoggedIn) {
             BufferedImage icon = ImageUtil.loadImageResource(getClass(), UIUtilities.logoutIcon);
             JLabel logout = buildButton(icon, "Log out", () -> {
-                fvLoginRS.clear();
+                copilotLoginRS.clear();
                 showLoggedOutView();
             });
             topBar.add(logout);

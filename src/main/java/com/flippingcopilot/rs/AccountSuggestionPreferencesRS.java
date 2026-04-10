@@ -78,6 +78,6 @@ public class AccountSuggestionPreferencesRS extends ReactiveStateImpl<AccountSug
     }
 
     private Path accountPreferencesPath(Long accountHash) {
-        return Paths.get(Persistance.FV_DIR.getPath(), "acc_" + accountHash + "_prefs.json");
+        return Paths.get(Persistance.COPILOT_DIR.getPath(), "acc_" + accountHash + "_prefs.json");
     }
 }

@@ -1,10 +1,10 @@
 package com.flippingcopilot.ui.flipsdialog;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import com.flippingcopilot.ui.Paginator;
 import com.flippingcopilot.ui.Spinner;
 import com.flippingcopilot.ui.components.AccountDropdown;
@@ -46,10 +46,11 @@ public class TransactionsPanel extends JPanel {
     };
 
     // dependencies
-    private final FVLoginRS fvLoginRS;
+    private final CopilotLoginRS copilotLoginRS;
     private final ItemController itemController;
     private final ExecutorService executorService;
     private final ApiRequestHandler apiRequestHandler;
+    private final OsrsLoginManager osrsLoginManager;
     private final FlipManager flipManager;
 
     // ui components
@@ -76,16 +77,18 @@ public class TransactionsPanel extends JPanel {
     private volatile Integer selectedAccountId;
     private volatile List<AckedTransaction> currentTransactions = new ArrayList<>();
 
-    public TransactionsPanel(FVLoginRS fvLoginRS,
+    public TransactionsPanel(CopilotLoginRS copilotLoginRS,
                              ItemController itemController,
                              @Named("copilotExecutor") ExecutorService executorService,
                              ApiRequestHandler apiRequestHandler,
-                             FlipVaultConfig config,
+                             OsrsLoginManager osrsLoginManager,
+                             FlippingCopilotConfig config,
                              FlipManager flipManager) {
-        this.fvLoginRS = fvLoginRS;
+        this.copilotLoginRS = copilotLoginRS;
         this.itemController = itemController;
         this.executorService = executorService;
         this.apiRequestHandler = apiRequestHandler;
+        this.osrsLoginManager = osrsLoginManager;
         this.flipManager = flipManager;
 
         setLayout(new BorderLayout());
@@ -124,7 +127,7 @@ public class TransactionsPanel extends JPanel {
 
         // Account dropdown
         accountDropdown = new AccountDropdown(
-                () -> fvLoginRS.get().displayNameToAccountId,
+                () -> copilotLoginRS.get().displayNameToAccountId,
                 accountId -> {
                     if (!Objects.equals(accountId, this.selectedAccountId)) {
                         currentPage = 1;
@@ -271,12 +274,18 @@ public class TransactionsPanel extends JPanel {
      * Load transactions when the panel is first shown
      */
     public void loadTransactionsIfNeeded() {
+        if (!canLoadForCurrentPlayer()) {
+            setSpinnerVisible(false);
+            errorLabel.setText("Log into the game to view account transactions");
+            errorLabel.setVisible(true);
+            return;
+        }
         if (loadTransactionsTriggered.compareAndSet(false, true)) {
             loadTransactions();
         }
     }
 
-    private void setupTable(FlipVaultConfig config) {
+    private void setupTable(FlippingCopilotConfig config) {
         table.setBackground(ColorScheme.DARK_GRAY_COLOR);
         table.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
         table.setSelectionBackground(ColorScheme.BRAND_ORANGE);
@@ -355,9 +364,25 @@ public class TransactionsPanel extends JPanel {
     }
 
     private void loadTransactions() {
+        if (!canLoadForCurrentPlayer()) {
+            setSpinnerVisible(false);
+            errorLabel.setText("Log into the game to view account transactions");
+            errorLabel.setVisible(true);
+            return;
+        }
+
+        String displayName = osrsLoginManager.getPlayerDisplayName();
+        if (Strings.isNullOrEmpty(displayName)) {
+            setSpinnerVisible(false);
+            errorLabel.setText("Log into the game to view account transactions");
+            errorLabel.setVisible(true);
+            return;
+        }
+
         setSpinnerVisible(true);
         errorLabel.setVisible(false);
         apiRequestHandler.asyncLoadTransactionsData(
+                displayName,
                 transactionsData -> {
                     SwingUtilities.invokeLater(() -> {
                         setSpinnerVisible(false);
@@ -373,6 +398,10 @@ public class TransactionsPanel extends JPanel {
                     });
                 }
         );
+    }
+
+    private boolean canLoadForCurrentPlayer() {
+        return osrsLoginManager.isValidLoginState() && !Strings.isNullOrEmpty(osrsLoginManager.getPlayerDisplayName());
     }
 
     private void setSpinnerVisible(boolean visible) {
@@ -408,7 +437,7 @@ public class TransactionsPanel extends JPanel {
     private void updateTable(List<AckedTransaction> txs) {
         currentTransactions = txs;
         tableModel.setRowCount(0);
-        Map<Integer, String> accountIdToDisplayName = fvLoginRS.get().accountIdToDisplayName;
+        Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
 
         for (AckedTransaction tx : txs) {
             int absQuantity = Math.abs(tx.getQuantity());
@@ -531,7 +560,7 @@ public class TransactionsPanel extends JPanel {
                 try (FileWriter writer = new FileWriter(file)) {
                     writer.write(Strings.join(columnNames, ","));
 
-                    Map<Integer, String> accountIdToDisplayName = fvLoginRS.get().accountIdToDisplayName;
+                    Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
 
                     // Use the stream method to write all matching transactions
                     transactionDataWrapper.stream(filteredItems, selectedAccountId)

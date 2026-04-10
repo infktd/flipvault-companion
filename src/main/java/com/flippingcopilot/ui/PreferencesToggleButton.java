@@ -30,7 +30,7 @@ class PreferencesToggleButton extends JToggleButton
 
     static
     {
-        BufferedImage onSwitcher = ImageUtil.loadImageResource(FVPanel.class, "/switcher_on.png");
+        BufferedImage onSwitcher = ImageUtil.loadImageResource(CopilotPanel.class, "/switcher_on.png");
         ON_SWITCHER = new ImageIcon(onSwitcher);
         OFF_SWITCHER = new ImageIcon(ImageUtil.flipImage(
                 ImageUtil.luminanceScale(

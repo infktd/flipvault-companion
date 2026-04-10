@@ -1,8 +1,7 @@
 package com.flippingcopilot.util;
 
-import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 
@@ -18,29 +17,16 @@ public class ProfitCalculator {
     private final static int MAX_PRICE_FOR_GE_TAX = 250000000;
     private final static int GE_TAX_CAP = 5000000;
     private final static double GE_TAX = 0.02;
-    private final static int GE_TAX_FREE_THRESHOLD = 50; // Items < 50 GP have 0 tax (rounds down to 0)
     private final static HashSet<Integer> GE_TAX_EXEMPT_ITEMS = new HashSet<>(
-            Arrays.asList(
-                    // Low-level food
-                    233, 315, 329, 347, 351, 355, 361, 365, 379, 1891, 2140, 2142, 2309, 2327,
-                    // Low-level ammo + Mind rune
-                    558, 806, 807, 808, 882, 884, 886,
-                    // Tools
-                    952, 1733, 1735, 1755, 1785, 2347, 5325, 5329, 5331, 5341, 5343, 8794,
-                    // Teleport tablets
-                    8007, 8008, 8009, 8010, 8011, 8013, 28790, 28824,
-                    // Jewelry + potions
-                    2552, 3853,  // Ring of dueling(8), Games necklace(8)
-                    3008, 3010, 3012, 3014,  // Energy potions
-                    // Bonds
-                    13190));
+            Arrays.asList(8011, 365, 2309, 882, 806, 1891, 8010, 1755, 28824, 2140, 2142, 8009, 5325, 1785, 2347, 347,
+                    884, 807, 28790, 379, 8008, 355, 2327, 558, 1733, 13190, 233, 351, 5341, 2552, 329, 8794, 5329,
+                    5343, 1735, 315, 952, 886, 808, 8013, 361, 8007, 5331));
 
     private final Client client;
     private final OfferManager offerManager;
     private final FlipManager flipManager;
     private final OsrsLoginManager osrsLoginManager;
-    private final FVLoginRS fvLoginRS;
-    private final ItemController itemController;
+    private final CopilotLoginRS copilotLoginRS;
 
     /**
      * Calculates the post-tax price for an item.
@@ -56,13 +42,12 @@ public class ProfitCalculator {
         if (GE_TAX_EXEMPT_ITEMS.contains(itemId)) {
             return 0;
         }
-        if (price < GE_TAX_FREE_THRESHOLD) {
-            return 0; // 2% of <50 rounds down to 0
-        }
+
         if (price >= MAX_PRICE_FOR_GE_TAX) {
             return GE_TAX_CAP;
         }
-        return (int)((long)price * 2 / 100);
+
+        return (int)Math.floor(price * GE_TAX);
     }
 
     /**
@@ -109,7 +94,7 @@ public class ProfitCalculator {
             return null;
         }
 
-        Integer accountId = fvLoginRS.get().getAccountId(displayName);
+        Integer accountId = copilotLoginRS.get().getAccountId(displayName);
         if (accountId == null || accountId == -1) {
             return null;
         }
@@ -139,7 +124,7 @@ public class ProfitCalculator {
             return null;
         }
 
-        Integer accountId = fvLoginRS.get().getAccountId(displayName);
+        Integer accountId = copilotLoginRS.get().getAccountId(displayName);
         if (accountId == null || accountId == -1) {
             return null;
         }
@@ -149,7 +134,7 @@ public class ProfitCalculator {
         t.setItemId(suggestion.getItemId());
         t.setPrice(suggestion.getPrice());
         t.setQuantity(suggestion.getQuantity());
-        t.setAmountSpent(suggestion.getPrice() * suggestion.getQuantity());
+        t.setAmountSpent((long) suggestion.getPrice() * suggestion.getQuantity());
         t.setType(OfferStatus.SELL);
 
         return flipManager.estimateTransactionProfit(accountId, t);
@@ -174,25 +159,22 @@ public class ProfitCalculator {
             return null;
         }
 
-        // Try server-side flip data first
-        Integer accountId = fvLoginRS.get().getAccountId(displayName);
-        if (accountId != null && accountId != -1) {
-            FlipV2 flip = flipManager.getLastFlipByItemId(accountId, itemId);
-            if (flip != null && !FlipStatus.FINISHED.equals(flip.getStatus())) {
-                long avgBuyPrice = flip.getAvgBuyPrice();
-                if (avgBuyPrice > 0) {
-                    return calculateProfitPerItem(itemId, sellPrice, avgBuyPrice);
-                }
-            }
+        Integer accountId = copilotLoginRS.get().getAccountId(displayName);
+        if (accountId == null || accountId == -1) {
+            return null;
         }
 
-        // Fall back to local buy tracking
-        Long localAvgBuy = flipManager.getLocalAvgBuyPrice(displayName, itemId);
-        if (localAvgBuy != null && localAvgBuy > 0) {
-            return calculateProfitPerItem(itemId, sellPrice, localAvgBuy);
+        FlipV2 flip = flipManager.getLastFlipByItemId(accountId, itemId);
+        if (flip == null || FlipStatus.FINISHED.equals(flip.getStatus())) {
+            return null;
         }
 
-        return null;
+        long avgBuyPrice = flip.getAvgBuyPrice();
+        if (avgBuyPrice <= 0) {
+            return null;
+        }
+
+        return calculateProfitPerItem(itemId, sellPrice, avgBuyPrice);
     }
 
     /**
@@ -208,34 +190,27 @@ public class ProfitCalculator {
             return 0;
         }
 
-        Integer accountId = fvLoginRS.get().getAccountId(displayName);
-        long accountHash = client.getAccountHash();
+        Integer accountId = copilotLoginRS.get().getAccountId(displayName);
+        if (accountId == null || accountId == -1) {
+            return 0;
+        }
 
+        long accountHash = client.getAccountHash();
+        
         for (int slotIndex = 0; slotIndex < GE_SLOT_COUNT; slotIndex++) {
             SavedOffer offer = offerManager.loadOffer(accountHash, slotIndex);
+            
             if (offer == null || !offer.getOfferStatus().equals(OfferStatus.SELL)) {
                 continue;
             }
 
-            // Try server flip data
-            if (accountId != null && accountId != -1) {
-                FlipV2 flip = flipManager.getLastFlipByItemId(accountId, offer.getItemId());
-                if (flip != null && !FlipStatus.FINISHED.equals(flip.getStatus())
-                        && flip.getCachedItemName().equals(itemName)) {
-                    return calculateOfferProfit(offer, flip);
-                }
-            }
-
-            // Fall back to local buy tracking for this item
-            String offerItemName = itemController.getItemName(offer.getItemId());
-            if (!itemName.equals(offerItemName)) {
+            FlipV2 flip = flipManager.getLastFlipByItemId(accountId, offer.getItemId());
+            if (flip == null || FlipStatus.FINISHED.equals(flip.getStatus())) {
                 continue;
             }
-            Long localAvgBuy = flipManager.getLocalAvgBuyPrice(displayName, offer.getItemId());
-            if (localAvgBuy != null && localAvgBuy > 0) {
-                int postTaxSellPrice = getPostTaxPrice(offer.getItemId(), offer.getPrice());
-                long profitPerItem = postTaxSellPrice - localAvgBuy;
-                return profitPerItem * offer.getTotalQuantity();
+
+            if (flip.getCachedItemName().equals(itemName)) {
+                return calculateOfferProfit(offer, flip);
             }
         }
 

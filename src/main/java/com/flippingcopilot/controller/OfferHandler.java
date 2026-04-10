@@ -1,7 +1,7 @@
 package com.flippingcopilot.controller;
 
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import com.flippingcopilot.ui.OfferEditor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -38,8 +38,7 @@ public class OfferHandler {
     private final OsrsLoginManager osrsLoginManager;
     private final OfferManager offerManager;
     private final HighlightController highlightController;
-    private final FVLoginRS fvLoginRS;
-    private final FlipManager flipManager;
+    private final CopilotLoginRS copilotLoginRS;
 
     // state
     private String viewedSlotPriceErrorText = null;
@@ -52,7 +51,7 @@ public class OfferHandler {
 
             var suggestion = suggestionManager.getSuggestion();
             if (suggestion != null && suggestion.getItemId() == currentItemId &&
-                    (Objects.equals(suggestion.offerType(), getOfferType()) || suggestion.isAbortSuggestion())) {
+                    Objects.equals(suggestion.offerType(), getOfferType())) {
                 offerManager.setViewedSlotItemPrice(suggestion.getPrice());
                 offerManager.setLastViewedSlotItemId(suggestion.getItemId());
                 offerManager.setLastViewedSlotItemPrice(suggestion.getPrice());
@@ -60,11 +59,11 @@ public class OfferHandler {
                 return;
             }
 
-            if (!fvLoginRS.get().isLoggedIn()) {
-                viewedSlotPriceErrorText = "Login to FlipVault to see item price.";
+            if (!copilotLoginRS.get().isLoggedIn()) {
+                viewedSlotPriceErrorText = "Login to copilot to see item price.";
                 return;
             }
-            viewedSlotPriceErrorText = "Loading FlipVault item price..";
+            viewedSlotPriceErrorText = "Loading copilot item price..";
             Consumer<ItemPrice> itemPriceConsumer = (fetchedPrice) -> {
                 clientThread.invoke(() -> {
                     if (fetchedPrice == null) {
@@ -106,25 +105,6 @@ public class OfferHandler {
             viewedSlotPriceErrorText = null;
         }
         highlightController.redraw();
-    }
-
-    private int capQuantityByBuyLimit(Suggestion suggestion) {
-        if (!suggestion.isBuySuggestion()) {
-            return suggestion.getQuantity();
-        }
-        String displayName = osrsLoginManager.getPlayerDisplayName();
-        if (displayName == null) {
-            return suggestion.getQuantity();
-        }
-        // Check how many of this item we've already bought this session
-        long alreadyBought = flipManager.getLocalBuyQuantity(displayName, suggestion.getItemId());
-        if (alreadyBought >= suggestion.getQuantity()) {
-            // We've already bought at or above the suggested quantity — buy limit likely exhausted
-            log.info("buy limit likely exhausted for item {} (already bought {}, suggested {})",
-                    suggestion.getItemId(), alreadyBought, suggestion.getQuantity());
-            return 0;
-        }
-        return suggestion.getQuantity();
     }
 
     public boolean isSettingQuantity() {
@@ -181,16 +161,11 @@ public class OfferHandler {
             if (suggestion == null || currentItemId != suggestion.getItemId()) {
                 return;
             }
-            int quantity = capQuantityByBuyLimit(suggestion);
-            if (quantity <= 0) {
-                log.info("skipping buy — GE buy limit exhausted for item {}", suggestion.getItemId());
-                return;
-            }
-            setChatboxValue(quantity);
+            setChatboxValue(suggestion.getQuantity());
         } else if (isSettingPrice()) {
             int price = -1;
             if (suggestion == null || currentItemId != suggestion.getItemId()
-                    || (!Objects.equals(suggestion.offerType(), getOfferType()) && !suggestion.isAbortSuggestion())) {
+                    || !Objects.equals(suggestion.offerType(), getOfferType())) {
                 if (offerManager.getViewedSlotItemId() != currentItemId) {
                     return;
                 }

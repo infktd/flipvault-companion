@@ -1,10 +1,10 @@
 package com.flippingcopilot.ui.flipsdialog;
 
 import com.flippingcopilot.controller.ApiRequestHandler;
-import com.flippingcopilot.config.FlipVaultConfig;
+import com.flippingcopilot.config.FlippingCopilotConfig;
 import com.flippingcopilot.controller.ItemController;
 import com.flippingcopilot.model.*;
-import com.flippingcopilot.rs.FVLoginRS;
+import com.flippingcopilot.rs.CopilotLoginRS;
 import com.flippingcopilot.rs.OsrsLoginRS;
 import com.flippingcopilot.ui.Paginator;
 import com.flippingcopilot.ui.Spinner;
@@ -48,7 +48,7 @@ public class FlipsPanel extends JPanel {
 
     // dependencies
     private final FlipManager flipsManager;
-    private final FVLoginRS fvLoginRS;
+    private final CopilotLoginRS copilotLoginRS;
     private final ApiRequestHandler apiRequestHandler;
     private final OsrsLoginRS osrsLoginRS;
 
@@ -60,7 +60,9 @@ public class FlipsPanel extends JPanel {
     private final JScrollPane scrollPane;
     private final JPanel spinnerOverlay;
     private final ItemSearchMultiSelect searchField;
-    private final JCheckBox showOpeningFlipsCheckbox;
+    private final JCheckBox showFinishedCheckbox;
+    private final JCheckBox showBuyingCheckbox;
+    private final JCheckBox showSellingCheckbox;
     private final Consumer<FlipV2> onVisualizeFlip;
     private IntervalDropdown timeIntervalDropdown;
     private AccountDropdown accountDropdown;
@@ -73,19 +75,19 @@ public class FlipsPanel extends JPanel {
 
     public FlipsPanel(OsrsLoginRS osrsLoginRS, FlipManager flipsManager,
                       ItemController itemController,
-                      FVLoginRS fvLoginRS,
+                      CopilotLoginRS copilotLoginRS,
                       @Named("copilotExecutor") ExecutorService executorService,
-                      FlipVaultConfig config,
+                      FlippingCopilotConfig config,
                       ApiRequestHandler apiRequestHandler,
                       Consumer<FlipV2> onVisualizeFlip) {
         this.osrsLoginRS = osrsLoginRS;
         this.onVisualizeFlip = onVisualizeFlip;
-        this.fvLoginRS = fvLoginRS;
+        this.copilotLoginRS = copilotLoginRS;
         this.apiRequestHandler = apiRequestHandler;
 
         // Initialize pagination first (before loadFlips is called)
         paginatorPanel = new Paginator((i) -> sortAndFilter.setPage(i));
-        sortAndFilter = new FlipFilterAndSort(flipsManager, this::showFlips, paginatorPanel::setTotalPages, this::setSpinnerVisible, executorService, fvLoginRS, itemController);
+        sortAndFilter = new FlipFilterAndSort(flipsManager, this::showFlips, paginatorPanel::setTotalPages, this::setSpinnerVisible, executorService, copilotLoginRS, itemController);
         this.flipsManager = flipsManager;
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -107,11 +109,23 @@ public class FlipsPanel extends JPanel {
         searchField.setMinimumSize(new Dimension(300, 0));
         searchField.setToolTipText("Search by item name");
 
-        showOpeningFlipsCheckbox= new JCheckBox("Show buying flips", true);
-        showOpeningFlipsCheckbox.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        showOpeningFlipsCheckbox.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-        showOpeningFlipsCheckbox.setFocusable(false);
-        showOpeningFlipsCheckbox.addActionListener(e -> sortAndFilter.setIncludeBuyingFlips(showOpeningFlipsCheckbox.isSelected()));
+        showFinishedCheckbox = new JCheckBox("FINISHED", true);
+        showBuyingCheckbox = new JCheckBox("BUYING", true);
+        showSellingCheckbox = new JCheckBox("SELLING", true);
+
+        showFinishedCheckbox.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        showBuyingCheckbox.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        showSellingCheckbox.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        showFinishedCheckbox.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        showBuyingCheckbox.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        showSellingCheckbox.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        showFinishedCheckbox.setFocusable(false);
+        showBuyingCheckbox.setFocusable(false);
+        showSellingCheckbox.setFocusable(false);
+
+        showFinishedCheckbox.addActionListener(e -> applyStatusFilters());
+        showBuyingCheckbox.addActionListener(e -> applyStatusFilters());
+        showSellingCheckbox.addActionListener(e -> applyStatusFilters());
 
         pageSizeComboBox = new JComboBox<>(PAGE_SIZE_OPTIONS);
         pageSizeComboBox.setSelectedItem(sortAndFilter.getPageSize());
@@ -250,7 +264,7 @@ public class FlipsPanel extends JPanel {
         table.getColumnModel().getColumn(6).setCellRenderer(centerRenderer); // Sold
 
         accountDropdown = new AccountDropdown(
-                () -> fvLoginRS.get().displayNameToAccountId,
+                () -> copilotLoginRS.get().displayNameToAccountId,
                 sortAndFilter::setAccountId,
                 AccountDropdown.ALL_ACCOUNTS_DROPDOWN_OPTION
         );
@@ -268,7 +282,17 @@ public class FlipsPanel extends JPanel {
         leftPanel.add(Box.createRigidArea(new Dimension(3,0)));
         leftPanel.add(accountDropdown);
         leftPanel.add(Box.createRigidArea(new Dimension(3,0)));
-        leftPanel.add(showOpeningFlipsCheckbox);
+        JLabel showLabel = new JLabel("Show:");
+        showLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+        leftPanel.add(showLabel);
+        leftPanel.add(Box.createRigidArea(new Dimension(3,0)));
+        leftPanel.add(showFinishedCheckbox);
+        leftPanel.add(Box.createRigidArea(new Dimension(2,0)));
+        leftPanel.add(showBuyingCheckbox);
+        leftPanel.add(Box.createRigidArea(new Dimension(2,0)));
+        leftPanel.add(showSellingCheckbox);
+
+        applyStatusFilters();
 
         JLayeredPane layeredPane = new JLayeredPane();
         layeredPane.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -349,7 +373,7 @@ public class FlipsPanel extends JPanel {
                 setSpinnerVisible(true);
                 log.info("deleting flip with ID: {}", flip.getId());
                 Consumer<FlipV2> onSuccess = (f) -> {
-                    flipsManager.mergeFlips(Collections.singletonList(f),fvLoginRS.get().getUserId());
+                    flipsManager.mergeFlips(Collections.singletonList(f),copilotLoginRS.get().getUserId());
                     setSpinnerVisible(false);
                     sortAndFilter.reloadFlips(true, true);
                 };
@@ -358,7 +382,7 @@ public class FlipsPanel extends JPanel {
         });
         menu.add(deleteItem);
 
-        String flipOsrsDisplayName = fvLoginRS.get().getDisplayName(flip.getAccountId());
+        String flipOsrsDisplayName = copilotLoginRS.get().getDisplayName(flip.getAccountId());
         if (shouldShowAddMissedSellOption(flipOsrsDisplayName, flip)) {
             JMenuItem missedSellTransaction = new JMenuItem("Add missed sell transaction");
             missedSellTransaction.addActionListener(evt -> {
@@ -410,10 +434,10 @@ public class FlipsPanel extends JPanel {
                         t.setPrice(price);
                         t.setQuantity(qty);
                         t.setBoxId(0);
-                        t.setAmountSpent(price * qty);
+                        t.setAmountSpent((long) price * qty);
                         t.setTimestamp(Instant.now());
-                        t.setFvPriceUsed(true);
-                        t.setWasFvSuggestion(true);
+                        t.setCopilotPriceUsed(true);
+                        t.setWasCopilotSuggestion(true);
                         t.setOfferTotalQuantity(qty);
 
                         Long profit = flipsManager.estimateTransactionProfit(flip.getAccountId(), t);
@@ -495,7 +519,7 @@ public class FlipsPanel extends JPanel {
         SwingUtilities.invokeLater(() -> {
             currentFlips = flips;
             tableModel.setRowCount(0);
-            Map<Integer, String> accountIdToDisplayName = fvLoginRS.get().accountIdToDisplayName;
+            Map<Integer, String> accountIdToDisplayName = copilotLoginRS.get().accountIdToDisplayName;
             for (FlipV2 flip : flips) {
                 long profitPerItem = flip.getClosedQuantity() > 0 ? flip.getProfit() / flip.getClosedQuantity() : 0L;
 
@@ -549,5 +573,19 @@ public class FlipsPanel extends JPanel {
     public void onTabShown() {
         sortAndFilter.reloadFlips(true, true);
         accountDropdown.refresh();
+    }
+
+    private void applyStatusFilters() {
+        EnumSet<FlipStatus> statuses = EnumSet.noneOf(FlipStatus.class);
+        if (showFinishedCheckbox.isSelected()) {
+            statuses.add(FlipStatus.FINISHED);
+        }
+        if (showBuyingCheckbox.isSelected()) {
+            statuses.add(FlipStatus.BUYING);
+        }
+        if (showSellingCheckbox.isSelected()) {
+            statuses.add(FlipStatus.SELLING);
+        }
+        sortAndFilter.setIncludedStatuses(statuses);
     }
 }
