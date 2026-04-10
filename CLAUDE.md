@@ -17,10 +17,20 @@
 - **Guice**: Dependency injection via `@Singleton` + `@Inject`; all singletons wired through RuneLite's injector
 
 ## Build & Run
-- `./gradlew build` — output: `build/libs/flipvault-companion-0.1.0.jar`
-- `./gradlew run` — launches RuneLite dev mode with plugin loaded (uses `FlippingCopilotPluginTest` as launcher)
-- To sideload: place project in RuneLite's external plugins directory; JAR sideloading no longer works
+- `./gradlew build` — output: `build/libs/flipping-copilot-<version>.jar` (version from `build.gradle`, artifact name from `rootProject.name` in `settings.gradle`)
+- `./gradlew run` — launches RuneLite dev mode with plugin loaded (uses `FlipVaultPluginTest` as launcher)
+- `./gradlew deploy` — builds and copies the jar to `~/.runelite/sideloaded-plugins/` for sideloading
 - Override API host: set env var `FLIPVAULT_HOST` (defaults to `https://api.flipvault.app/api/plugin`)
+
+## Sideloading
+Jar sideloading works when RuneLite is in `--developer-mode`. When RuneLite is launched via the Jagex Launcher, dev mode is silently disabled unless a premain Java agent clears the `runelite.launcher.version` system property before `main()` runs. The devmode-agent jar lives at `%LOCALAPPDATA%\RuneLite\devmode-agent.jar` on the dev machine and is wired into `%LOCALAPPDATA%\RuneLite\settings.json` via:
+
+```json
+"clientArguments": ["--insecure-write-credentials", "--developer-mode"],
+"jvmArguments": ["-javaagent:C:\\Users\\jayne\\AppData\\Local\\RuneLite\\devmode-agent.jar", "-ea"]
+```
+
+The agent source lives in the companion `osrs-suite` repo under `tools/devmode-agent/`. Fat-jar rule: `module-info.class` and `META-INF/versions/**` must be excluded from the built jar — RuneLite's Guava `ClassPath` scanner crashes (silent, no error dialog) on Java 9+ multi-release module-info entries. Both exclusions are configured in the `jar` block of `build.gradle`.
 
 ## Architecture
 

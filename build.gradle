@@ -36,3 +36,37 @@ tasks.register('run', JavaExec) {
 	enableAssertions = true
 	jvmArgs = ['-ea', '--add-exports', 'java.desktop/com.apple.eawt=ALL-UNNAMED']
 }
+
+// Defensive fat-jar exclusions. Current slim jar has no module-info (verified),
+// but if dependencies ever move from compileOnly → implementation, multi-release
+// `module-info.class` entries would break RuneLite's Guava ClassPath scanner at
+// sideload time (silent crash, no error dialog). Excluding proactively.
+jar {
+	exclude 'META-INF/versions/**'
+	exclude 'module-info.class'
+}
+
+// ./gradlew deploy — build and copy the plugin jar to RuneLite's sideloaded
+// plugins directory. Works on Windows/Mac/Linux via user.home.
+//
+// Sideloading requires RuneLite to be in --developer-mode. When launched via
+// the Jagex Launcher, developer mode is silently disabled unless you also run
+// a premain Java agent that clears runelite.launcher.version before main() —
+// see the osrs-suite tools/devmode-agent/ for the 15-line agent jar.
+tasks.register('deploy') {
+	group = 'application'
+	description = 'Build and copy the plugin jar to ~/.runelite/sideloaded-plugins'
+	dependsOn 'build'
+
+	doLast {
+		def dest = file("${System.getProperty('user.home')}/.runelite/sideloaded-plugins")
+		dest.mkdirs()
+		tasks.jar.outputs.files.each { jar ->
+			copy {
+				from jar
+				into dest
+			}
+			println "Deployed ${jar.name} → ${dest}"
+		}
+	}
+}
