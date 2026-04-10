@@ -89,7 +89,12 @@ public class UIUtilities {
 
     public static String formatSuggestionDuration(double durationSeconds) {
         int totalMinutes = (int) Math.round(durationSeconds / 60.0);
-        totalMinutes = Math.round(totalMinutes / 5.0f) * 5;
+        if (totalMinutes >= 24 * 60) {
+            // Round to nearest hour when at least 1 day
+            totalMinutes = Math.round(totalMinutes / 60.0f) * 60;
+        } else {
+            totalMinutes = Math.round(totalMinutes / 5.0f) * 5;
+        }
         totalMinutes = Math.max(totalMinutes, 5);
 
         String formatted = formatDurationMinutes(totalMinutes);
@@ -106,7 +111,10 @@ public class UIUtilities {
         int remainingMinutes = safeMinutes % 60;
 
         if (days > 0) {
-            return days + "d " + hours + "h";
+            if (hours > 0) {
+                return days + "d " + hours + "h";
+            }
+            return days + "d";
         }
         if (hours > 0) {
             return hours + "h " + remainingMinutes + "m";
