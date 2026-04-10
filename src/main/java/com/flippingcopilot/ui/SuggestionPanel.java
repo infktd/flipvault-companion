@@ -53,7 +53,6 @@ public class SuggestionPanel extends JPanel {
     private final PremiumInstanceController premiumInstanceController;
     private final FlipsDialogController flipsDialogController;
     private final ProfitCalculator profitCalculator;
-    private final OfferManager offerManager;
 
 
     private final JLabel suggestionText = new JLabel();
@@ -90,7 +89,7 @@ public class SuggestionPanel extends JPanel {
                            ClientThread clientThread,
                            HighlightController highlightController,
                            ItemManager itemManager,
-                           GrandExchange grandExchange, PremiumInstanceController premiumInstanceController, FlipsDialogController flipsDialogController, ProfitCalculator profitCalculator, OfferManager offerManager) {
+                           GrandExchange grandExchange,  PremiumInstanceController premiumInstanceController, FlipsDialogController flipsDialogController, ProfitCalculator profitCalculator) {
         this.preferencesPanel = preferencesPanel;
         this.config = config;
         this.suggestionManager = suggestionManager;
@@ -109,7 +108,6 @@ public class SuggestionPanel extends JPanel {
         this.premiumInstanceController = premiumInstanceController;
         this.flipsDialogController = flipsDialogController;
         this.profitCalculator = profitCalculator;
-        this.offerManager = offerManager;
 
         layeredPane.setLayout(null);
         setPreferredSize(new Dimension(MainPanel.CONTENT_WIDTH, 150));
@@ -263,10 +261,6 @@ public class SuggestionPanel extends JPanel {
             Suggestion s = suggestionManager.getSuggestion();
             if(s != null) {
                 s.actionedTick = client.getTickCount();
-                if (s.isAbortSuggestion()) {
-                    // User wants to choose their own re-price — suppress auto-fill until they confirm
-                    offerManager.setUserChoosingPrice(true);
-                }
             }
             accountStatusManager.setSkipSuggestion(s != null ? s.getId() : -1);
             suggestionManager.setSuggestionNeeded(true);

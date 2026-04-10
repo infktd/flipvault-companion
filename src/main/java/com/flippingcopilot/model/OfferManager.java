@@ -49,12 +49,6 @@ public class OfferManager {
     @Setter
     boolean offerJustPlaced = false;
 
-    // Set when the user explicitly skips an abort suggestion — suppresses price auto-fill
-    // so they can enter their own re-price freely. Cleared on offer confirm.
-    @Getter
-    @Setter
-    private volatile boolean userChoosingPrice = false;
-
     private final Map<Long, Map<Integer, SavedOffer>> cachedOffers = new HashMap<>();
     private final Map<Long, Map<Integer, File>> files = new HashMap<>();
     private final Map<Long, Map<Integer, SavedOffer>> lastSaved = new HashMap<>();
